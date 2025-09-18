@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generatore Ricevute con Matching Bancario</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1, h2 {
+            color: #333;
+        }
+        
+        .step {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .step.inactive {
+            border-left-color: #ccc;
+            opacity: 0.6;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input[type="file"] {
+            display: block;
+            margin: 10px 0;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .secondary-btn {
+            background-color: #2196F3;
+        }
+        
+        .secondary-btn:hover {
+            background-color: #1976D2;
+        }
+        
+        .info-box {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .success-box {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .error-box {
+            background-color: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        .match-status {
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        
+        .match-found {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .match-not-found {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        /* Stili per la ricevuta */
+        .ricevuta {
+            background-color: white;
+            padding: 40px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            page-break-after: always;
+            min-height: 297mm;
+            width: 210mm;
+            margin: 0 auto 20px;
+            box-sizing: border-box;
+        }
+        
+        .ricevuta-header {
+            margin-bottom: 30px;
+        }
+        
+        .ricevuta-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        
+        .ricevuta-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .ricevuta-table th {
+            background-color: #003d7a;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        .ricevuta-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        
+        .ricevuta-table .amount {
+            text-align: right;
+        }
+        
+        .ricevuta-footer {
+            margin-top: 30px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .signature-line {
+            margin-top: 50px;
+            text-align: right;
+        }
+        
+        .no-print {
+            display: block;
+        }
+        
+        @media print {
+            body {
+                margin: 0;
+                background-color: white;
+            }
+            
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .ricevuta {
+                border: none;
+                margin: 0;
+                padding: 20mm;
+            }
+        }
+        
+        #previewArea {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+        }
+        
+        .tab.active {
+            border-bottom: 2px solid #4CAF50;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container no-print">
+        <h1>🎨 Generatore Ricevute per Prestazioni Artistiche</h1>
+        <p>Sistema automatizzato per generare ricevute incrociando dati anagrafici e movimenti bancari</p>
+        
+        <!-- Step 1: Carica file iscrizioni -->
+        <div class="step" id="step1">
+            <h2>📁 Step 1: Carica File Iscrizioni</h2>
+            <div class="info-box">
+                <strong>Formato richiesto:</strong> File Excel (.xlsx) contenente i dati anagrafici degli artisti
+            </div>
+            <input type="file" id="iscrizioniFile" accept=".xlsx,.xls">
+            <button onclick="loadIscrizioni()">Carica Iscrizioni</button>
+            <div id="iscrizioniResult"></div>
+        </div>
+        
+        <!-- Step 2: Carica movimenti bancari -->
+        <div class="step inactive" id="step2">
+            <h2>💳 Step 2: Carica Movimenti Bancari</h2>
+            <div class="info-box">
+                <strong>⚠️ Nota importante:</strong> Gli importi nei movimenti bancari sono considerati come <strong>NETTI</strong> (già al netto della ritenuta del 20%).<br>
+                Il sistema calcolerà automaticamente il compenso lordo = importo netto ÷ 0,8
+            </div>
+            <input type="file" id="movimentiFile" accept=".xlsx,.xls" disabled>
+            <button onclick="loadMovimenti()" disabled id="loadMovimentiBtn">Carica Movimenti</button>
+            <div id="movimentiResult"></div>
+        </div>
+        
+        <!-- Step 3: Matching e generazione -->
+        <div class="step inactive" id="step3">
+            <h2>🔄 Step 3: Matching e Generazione Ricevute</h2>
+            <button onclick="performMatching()" disabled id="matchBtn">Esegui Matching</button>
+            <button onclick="generateReceipts()" disabled id="generateBtn">Genera Ricevute</button>
+            <button onclick="createZipLink()" disabled id="downloadBtn" class="secondary-btn">📥 Crea ZIP con PDF</button>
+            <button onclick="resetProgressiveNumbers()" class="secondary-btn" style="background-color: #ff9800;">🔄 Reset Numerazione</button>
+            
+            <div id="downloadLinkContainer" style="margin-top: 20px; display: none;">
+                <div class="success-box">
+                    <strong>✓ ZIP generato con successo!</strong><br>
+                    <a id="downloadLink" href="#" download="" style="font-size: 18px; color: #4CAF50; font-weight: bold;">
+                        📥 Clicca qui per scaricare il file ZIP
+                    </a>
+                </div>
+            </div>
+            
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <div class="tabs" style="margin-top: 20px;">
+                <button class="tab active" onclick="showTab('matching')">Risultati Matching</button>
+                <button class="tab" onclick="showTab('preview')">Anteprima Ricevute</button>
+            </div>
+            
+            <div id="matchingTab" class="tab-content active">
+                <div id="matchingResult"></div>
+            </div>
+            
+            <div id="previewTab" class="tab-content">
+                <div id="previewArea"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="receiptsContainer"></div>
+    
+    <script>
+        let iscrizioniData = [];
+        let movimentiData = [];
+        let matchedData = [];
+        
+        // Memoria dei numeri di ricevuta per CF
+        let numeroRicevutaPerCF = {};
+        if (localStorage.getItem('numeroRicevutaPerCF')) {
+            numeroRicevutaPerCF = JSON.parse(localStorage.getItem('numeroRicevutaPerCF'));
+        }
+        
+        // Funzione per ottenere il prossimo numero di ricevuta per un CF
+        function getNextReceiptNumber(cf) {
+            if (!numeroRicevutaPerCF[cf]) {
+                numeroRicevutaPerCF[cf] = 0;
+            }
+            numeroRicevutaPerCF[cf]++;
+            // Salva in localStorage per persistenza
+            localStorage.setItem('numeroRicevutaPerCF', JSON.stringify(numeroRicevutaPerCF));
+            return numeroRicevutaPerCF[cf];
+        }
+        
+        // Funzione per ottenere il numero corrente senza incrementare
+        function getCurrentReceiptNumber(cf) {
+            return numeroRicevutaPerCF[cf] || 0;
+        }
+        
+        function showTab(tabName) {
+            // Rimuovi active da tutti i tab
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Attiva il tab selezionato
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+        
+        function loadIscrizioni() {
+            const file = document.getElementById('iscrizioniFile').files[0];
+            if (!file) {
+                alert('Seleziona un file Excel con le iscrizioni');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    
+                    // Prendi il primo foglio
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    iscrizioniData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    // Mostra risultato
+                    const resultDiv = document.getElementById('iscrizioniResult');
+                    resultDiv.innerHTML = `
+                        <div class="success-box">
+                            ✓ File caricato con successo!<br>
+                            <strong>${iscrizioniData.length}</strong> artisti trovati<br>
+                            Colonne rilevate: ${Object.keys(iscrizioniData[0] || {}).join(', ')}
+                        </div>
+                    `;
+                    
+                    // Abilita step 2
+                    document.getElementById('step2').classList.remove('inactive');
+                    document.getElementById('movimentiFile').disabled = false;
+                    document.getElementById('loadMovimentiBtn').disabled = false;
+                    
+                    // Mostra anteprima
+                    showDataPreview(iscrizioniData.slice(0, 5), resultDiv, 'Anteprima primi 5 artisti:');
+                    
+                } catch (error) {
+                    document.getElementById('iscrizioniResult').innerHTML = `
+                        <div class="error-box">
+                            ✗ Errore nel caricamento: ${error.message}
+                        </div>
+                    `;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function loadMovimenti() {
+            const file = document.getElementById('movimentiFile').files[0];
+            if (!file) {
+                alert('Seleziona un file Excel con i movimenti bancari');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    
+                    // Prendi il primo foglio
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    movimentiData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    // Mostra risultato
+                    const resultDiv = document.getElementById('movimentiResult');
+                    resultDiv.innerHTML = `
+                        <div class="success-box">
+                            ✓ File caricato con successo!<br>
+                            <strong>${movimentiData.length}</strong> movimenti trovati<br>
+                            Colonne rilevate: ${Object.keys(movimentiData[0] || {}).join(', ')}
+                        </div>
+                    `;
+                    
+                    // Abilita step 3
+                    document.getElementById('step3').classList.remove('inactive');
+                    document.getElementById('matchBtn').disabled = false;
+                    
+                    // Mostra anteprima
+                    showDataPreview(movimentiData.slice(0, 5), resultDiv, 'Anteprima primi 5 movimenti:');
+                    
+                } catch (error) {
+                    document.getElementById('movimentiResult').innerHTML = `
+                        <div class="error-box">
+                            ✗ Errore nel caricamento: ${error.message}
+                        </div>
+                    `;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function showDataPreview(data, container, title) {
+            if (data.length === 0) return;
+            
+            let html = `<h4>${title}</h4><table><thead><tr>`;
+            
+            // Header
+            Object.keys(data[0]).forEach(key => {
+                html += `<th>${key}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            // Rows
+            data.forEach(row => {
+                html += '<tr>';
+                Object.values(row).forEach(value => {
+                    html += `<td>${value || ''}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            
+            const previewDiv = document.createElement('div');
+            previewDiv.innerHTML = html;
+            container.appendChild(previewDiv);
+        }
+        
+        function normalizeString(str) {
+            if (!str) return '';
+            return str.toString()
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') // Rimuove accenti
+                .replace(/[^a-z0-9]/g, ''); // Rimuove caratteri speciali
+        }
+        
+        function findBestMatch(movimento, iscrizioni) {
+            // Prova a matchare per codice fiscale se presente
+            const cfColumns = ['CODICE FISCALE', 'CF', 'CODICEFISCALE', 'C.F.', 'Codice Fiscale'];
+            const movimentoCF = findColumnValue(movimento, cfColumns);
+            
+            if (movimentoCF) {
+                const match = iscrizioni.find(isc => {
+                    const iscCF = findColumnValue(isc, cfColumns);
+                    return iscCF && normalizeString(iscCF) === normalizeString(movimentoCF);
+                });
+                if (match) return match;
+            }
+            
+            // Prova a matchare per CONTROPARTE
+            const controparteColumns = ['CONTROPARTE', 'Controparte', 'BENEFICIARIO', 'Beneficiario'];
+            const nomeColumns = ['NOME', 'Nome', 'nome'];
+            const cognomeColumns = ['COGNOME', 'Cognome', 'cognome'];
+            
+            const controparte = findColumnValue(movimento, controparteColumns);
+            
+            if (controparte) {
+                const controparteNorm = normalizeString(controparte);
+                
+                // Cerca match con nome+cognome o cognome+nome
+                return iscrizioni.find(isc => {
+                    const iscNome = findColumnValue(isc, nomeColumns);
+                    const iscCognome = findColumnValue(isc, cognomeColumns);
+                    
+                    if (!iscNome || !iscCognome) return false;
+                    
+                    const nomeNorm = normalizeString(iscNome);
+                    const cognomeNorm = normalizeString(iscCognome);
+                    
+                    // Prova nome+cognome
+                    const nomeCognome = nomeNorm + cognomeNorm;
+                    const cognomeNome = cognomeNorm + nomeNorm;
+                    
+                    // Verifica se la controparte contiene nome e cognome in qualsiasi ordine
+                    return (controparteNorm.includes(nomeNorm) && controparteNorm.includes(cognomeNorm)) ||
+                           controparteNorm === nomeCognome ||
+                           controparteNorm === cognomeNome;
+                });
+            }
+            
+            return null;
+        }
+        
+        function findColumnValue(row, possibleColumns) {
+            for (let col of possibleColumns) {
+                if (row[col] !== undefined && row[col] !== null && row[col] !== '') {
+                    return row[col];
+                }
+            }
+            // Prova anche con le chiavi esatte dell'oggetto
+            for (let key of Object.keys(row)) {
+                if (possibleColumns.some(col => key.toUpperCase().includes(col.toUpperCase()))) {
+                    return row[key];
+                }
+            }
+            return null;
+        }
+        
+        function getImportoSingoloMovimento(movimento) {
+            const importoColumns = ['IMPORTO', 'Importo', 'ACCREDITI', 'Accrediti', 'ADDEBITI', 'Addebiti', 'ADDEBITO', 'Addebito', 'DARE', 'Dare', 'USCITE', 'Uscite', 'AVERE', 'Avere'];
+            
+            for (let col of importoColumns) {
+                if (movimento[col]) {
+                    // Converti in numero
+                    let value = movimento[col];
+                    if (typeof value === 'string') {
+                        value = value.replace(/[^\d,-]/g, '').replace(',', '.');
+                    }
+                    return Math.abs(parseFloat(value)) || 0;
+                }
+            }
+            
+            return 0;
+        }
+        
+        function performMatching() {
+            let matchedMovimenti = [];
+            let notMatched = [];
+            
+            // Prima fase: trova tutti i match
+            movimentiData.forEach((movimento, index) => {
+                const match = findBestMatch(movimento, iscrizioniData);
+                
+                if (match) {
+                    matchedMovimenti.push({
+                        movimento: movimento,
+                        iscrizione: match,
+                        importoMovimento: getImportoSingoloMovimento(movimento),
+                        matchStatus: 'found'
+                    });
+                } else {
+                    notMatched.push({
+                        movimento: movimento,
+                        matchStatus: 'not_found'
+                    });
+                }
+            });
+            
+            // Seconda fase: raggruppa per persona (usando CF come chiave)
+            const gruppiPerPersona = {};
+            
+            matchedMovimenti.forEach(item => {
+                const cf = findColumnValue(item.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE']) || 
+                          `${findColumnValue(item.iscrizione, ['NOME', 'Nome'])}_${findColumnValue(item.iscrizione, ['COGNOME', 'Cognome'])}`;
+                
+                if (!gruppiPerPersona[cf]) {
+                    gruppiPerPersona[cf] = {
+                        iscrizione: item.iscrizione,
+                        movimenti: [],
+                        totaleMovimenti: 0
+                    };
+                }
+                
+                gruppiPerPersona[cf].movimenti.push(item.movimento);
+                gruppiPerPersona[cf].totaleMovimenti += item.importoMovimento;
+            });
+            
+            // Converti in array e calcola rimborsi sul totale
+            matchedData = Object.values(gruppiPerPersona).map(gruppo => {
+                // Calcola rimborso spese sul totale dei movimenti
+                let rimborsoSpese = 0;
+                if (gruppo.totaleMovimenti >= 500) {
+                    rimborsoSpese = 200;
+                } else if (gruppo.totaleMovimenti >= 300) {
+                    rimborsoSpese = 100;
+                } else if (gruppo.totaleMovimenti >= 100) {
+                    rimborsoSpese = 40;
+                }
+                
+                // Il compenso netto è: totale movimenti - rimborso spese
+                const compensoNetto = gruppo.totaleMovimenti - rimborsoSpese;
+                
+                // Calcola il lordo dal compenso netto
+                const compensoLordo = compensoNetto / 0.8;
+                
+                return {
+                    iscrizione: gruppo.iscrizione,
+                    movimenti: gruppo.movimenti,
+                    movimentoBancario: gruppo.totaleMovimenti,
+                    importo: compensoLordo,
+                    rimborsoSpese: rimborsoSpese,
+                    matchStatus: 'found'
+                };
+            });
+            
+            // Mostra risultati
+            const resultDiv = document.getElementById('matchingResult');
+            let html = `
+                <div class="info-box">
+                    <strong>Risultati del matching:</strong><br>
+                    ✓ Persone con pagamenti: ${matchedData.length}<br>
+                    ✓ Movimenti matchati: ${matchedMovimenti.length}<br>
+                    ✗ Non matchati: ${notMatched.length}<br>
+                    Totale movimenti: ${movimentiData.length}
+                </div>
+            `;
+            
+            if (matchedData.length > 0) {
+                html += `
+                    <h4>Ricevute da generare (raggruppate per persona):</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Cognome</th>
+                                <th>Codice Fiscale</th>
+                                <th>N° Movimenti</th>
+                                <th>Dettagli Importi</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                matchedData.forEach(item => {
+                    const nome = findColumnValue(item.iscrizione, ['NOME', 'Nome']);
+                    const cognome = findColumnValue(item.iscrizione, ['COGNOME', 'Cognome']);
+                    const cf = findColumnValue(item.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE']);
+                    const compensoNetto = item.importo * 0.8;
+                    const numMovimenti = item.movimenti.length;
+                    
+                    html += `
+                        <tr>
+                            <td>${nome || ''}</td>
+                            <td>${cognome || ''}</td>
+                            <td>${cf || ''}</td>
+                            <td>${numMovimenti}</td>
+                            <td>Totale movimenti: € ${item.movimentoBancario.toFixed(2)}<br>
+                                ${item.rimborsoSpese > 0 ? `Rimborso spese: € ${item.rimborsoSpese.toFixed(2)}<br>` : ''}
+                                Compenso lordo: € ${item.importo.toFixed(2)}<br>
+                                Compenso netto: € ${compensoNetto.toFixed(2)}</td>
+                            <td><span class="match-status ${numMovimenti > 1 ? 'match-multiple' : 'match-found'}">${numMovimenti > 1 ? 'Multiplo' : 'Singolo'}</span></td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                
+                // Abilita generazione ricevute
+                document.getElementById('generateBtn').disabled = false;
+            }
+            
+            if (notMatched.length > 0) {
+                html += `
+                    <h4>Movimenti non matchati:</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Controparte</th>
+                                <th>Importo</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                notMatched.forEach(item => {
+                    const controparte = findColumnValue(item.movimento, ['CONTROPARTE', 'Controparte', 'BENEFICIARIO', 'Beneficiario']) || 'N/D';
+                    const importoNetto = getImportoFromMovimento(item.movimento) * 0.8;
+                    const importoLordo = getImportoFromMovimento(item.movimento);
+                    
+                    html += `
+                        <tr>
+                            <td>${controparte}</td>
+                            <td>€ ${importoLordo.toFixed(2)} (netto: € ${importoNetto.toFixed(2)})</td>
+                            <td><span class="match-status match-not-found">Non trovato</span></td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+        
+        function generateReceipts() {
+            if (matchedData.length === 0) {
+                alert('Nessun match trovato per generare ricevute');
+                return;
+            }
+            
+            const container = document.getElementById('receiptsContainer');
+            const previewContainer = document.getElementById('previewArea');
+            
+            container.innerHTML = '';
+            previewContainer.innerHTML = '<h4>Anteprima Ricevute Generate:</h4>';
+            
+            matchedData.forEach((item, index) => {
+                const person = {
+                    nome: findColumnValue(item.iscrizione, ['NOME', 'Nome']) || '',
+                    cognome: findColumnValue(item.iscrizione, ['COGNOME', 'Cognome']) || '',
+                    indirizzo: findColumnValue(item.iscrizione, ['INDIRIZZO', 'Indirizzo', 'VIA', 'Via']) || '',
+                    cap: findColumnValue(item.iscrizione, ['CAP', 'C.A.P.']) || '',
+                    citta: findColumnValue(item.iscrizione, ['CITTA', 'CITTÀ', 'Citta', 'Città', 'COMUNE', 'Comune']) || '',
+                    provincia: findColumnValue(item.iscrizione, ['PROVINCIA', 'PROV', 'Provincia', 'Prov']) || '',
+                    codiceFiscale: findColumnValue(item.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE', 'C.F.']) || '',
+                    compenso: item.importo,
+                    rimborsoSpese: item.rimborsoSpese,
+                    movimentoBancario: item.movimentoBancario
+                };
+                
+                const receipt = generateReceipt(person, item);
+                container.innerHTML += receipt;
+                
+                // Aggiungi anteprima - usa getCurrentReceiptNumber per vedere il numero appena assegnato
+                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                const numeroRicevuta = getCurrentReceiptNumber(cfKey);
+                
+                const previewItem = document.createElement('div');
+                previewItem.style.cssText = 'border: 1px solid #ddd; padding: 10px; margin: 10px 0; background: #f9f9f9;';
+                const totaleNetto = (person.compenso * 0.8) + person.rimborsoSpese;
+                previewItem.innerHTML = `
+                    <strong>#${numeroRicevuta} - ${person.nome} ${person.cognome}</strong><br>
+                    CF: ${person.codiceFiscale}<br>
+                    ${item.movimenti.length > 1 ? `Somma di ${item.movimenti.length} movimenti<br>` : ''}
+                    Totale movimenti: € ${item.movimentoBancario.toFixed(2)}<br>
+                    ${person.rimborsoSpese > 0 ? `Rimborso spese: € ${person.rimborsoSpese.toFixed(2)}<br>` : ''}
+                    Compenso lordo: € ${person.compenso.toFixed(2)}<br>
+                    <strong>Netto a pagare: € ${totaleNetto.toFixed(2)}</strong>
+                `;
+                previewContainer.appendChild(previewItem);
+            });
+            
+            // Abilita download PDF
+            document.getElementById('downloadBtn').disabled = false;
+            
+            // Mostra tab anteprima
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelector('.tab:last-child').classList.add('active');
+            document.getElementById('previewTab').classList.add('active');
+            
+            // Chiedi se stampare
+            setTimeout(() => {
+                if (confirm(`Generate ${matchedData.length} ricevute. Vuoi procedere con la stampa?`)) {
+                    window.print();
+                }
+            }, 500);
+        }
+        
+        function generateReceipt(person, item) {
+            const today = new Date();
+            const dateStr = today.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            
+            const ritenuta = person.compenso * 0.20;
+            const compensoNetto = person.compenso - ritenuta;
+            const nettoPagare = person.movimentoBancario || (compensoNetto + person.rimborsoSpese);
+            const needsStamp = person.compenso > 77.47;
+            
+            // Ottieni numero progressivo per questo CF
+            const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+            const numeroRicevuta = getNextReceiptNumber(cfKey);
+            
+            // Se non ci sono rimborsi spese, usa il formato standard
+            if (person.rimborsoSpese === 0) {
+                return `
+                    <div class="ricevuta">
+                        <div class="ricevuta-header">
+                            <div style="text-transform: uppercase;">
+                                ${person.nome} ${person.cognome}<br>
+                                ${person.indirizzo}<br>
+                                ${person.cap} – ${person.citta} – ${person.provincia}<br>
+                                C.F. ${person.codiceFiscale}
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="ricevuta-info">
+                            <div>
+                                <strong>SPETT.LE</strong><br>
+                                OKL SRL<br>
+                                VIA MONTE PASUBIO<br>
+                                36010 – ZANE' – (VI)<br>
+                                P.I. 04433920248
+                            </div>
+                            <div style="text-align: right;">
+                                <strong>RICEVUTA NUMERO:</strong> ${numeroRicevuta}<br>
+                                <strong>DATA:</strong> ${dateStr}
+                            </div>
+                        </div>
+                        
+                        <div style="margin: 20px 0;">
+                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
+                        </div>
+                        
+                        <table class="ricevuta-table">
+                            <thead>
+                                <tr>
+                                    <th>DESCRIZIONE COMPENSO</th>
+                                    <th style="text-align: right;">IMPORTO</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
+                                    <td class="amount">€ ${person.compenso.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align: right;"><strong>COMPENSO LORDO</strong></td>
+                                    <td class="amount"><strong>€ ${person.compenso.toFixed(2)}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
+                                    <td class="amount">€ ${ritenuta.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align: right;"><strong>NETTO A PAGARE</strong></td>
+                                    <td class="amount"><strong>€ ${compensoNetto.toFixed(2)}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="ricevuta-footer">
+                            <p><em>${needsStamp ? 'Imposta di bollo da 2,00 euro assolta sull\'originale per importi maggiori di 77,47 euro.' : ''}</em></p>
+                            <p><em>Operazione esclusa da IVA ai sensi dell'art. 5 del D.P.R. 633/72.</em></p>
+                            
+                            <p style="margin-top: 20px;">
+                                • Il sottoscritto dichiara che, nell'anno solare in corso, <strong>alla data odierna</strong>:
+                            </p>
+                            <p>
+                                non ha conseguito redditi derivanti dall'esercizio di attività di lavoro autonomo occasionale pari o eccedenti<br>
+                                i 5.000 euro e <strong>si obbliga a comunicare l'eventuale superamento</strong> del limite annuo, anche successivamente<br>
+                                alla data odierna.
+                            </p>
+                            
+                            <div class="signature-line">
+                                <p>_________________________<br>(Firma)</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Formato con rimborso spese
+                return `
+                    <div class="ricevuta">
+                        <div class="ricevuta-header">
+                            <div style="text-transform: uppercase;">
+                                ${person.nome} ${person.cognome}<br>
+                                ${person.indirizzo}<br>
+                                ${person.cap} – ${person.citta} – ${person.provincia}<br>
+                                ${person.codiceFiscale}
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="ricevuta-info">
+                            <div>
+                                <strong>SPETT.LE</strong><br>
+                                OKL SRL<br>
+                                VIA MONTE PASUBIO<br>
+                                36010 – ZANE' – (VI)<br>
+                                P.I. 04433920248
+                            </div>
+                            <div style="text-align: right;">
+                                <strong>RICEVUTA NUM:</strong> ${numeroRicevuta}<br>
+                                <strong>DATA:</strong> ${dateStr}
+                            </div>
+                        </div>
+                        
+                        <div style="margin: 20px 0;">
+                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
+                        </div>
+                        
+                        <table class="ricevuta-table">
+                            <thead>
+                                <tr>
+                                    <th>DESCRIZIONE COMPENSO</th>
+                                    <th style="text-align: right;">IMPORTO</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
+                                    <td class="amount">${person.compenso.toFixed(2)} €</td>
+                                </tr>
+                                <tr style="background-color: #f0f0f0;">
+                                    <td style="text-align: center;"><strong>COMPENSO LORDO</strong></td>
+                                    <td class="amount"><strong>${person.compenso.toFixed(2)} €</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
+                                    <td class="amount">${ritenuta.toFixed(2)} €</td>
+                                </tr>
+                                <tr style="background-color: #f0f0f0;">
+                                    <td>COMPENSO NETTO</td>
+                                    <td class="amount">${compensoNetto.toFixed(2)} €</td>
+                                </tr>
+                                <tr>
+                                    <td>RIMBORSO SPESE</td>
+                                    <td class="amount">${person.rimborsoSpese.toFixed(2)} €</td>
+                                </tr>
+                                <tr style="background-color: #e0e0e0;">
+                                    <td style="text-align: center;"><strong>NETTO A PAGARE (COMPRENSIVO DI SPESE)</strong></td>
+                                    <td class="amount"><strong>${nettoPagare.toFixed(2)} €</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="ricevuta-footer">
+                            <p><em>Imposta di bollo da 2,00 euro assolta sull'originale per importi maggiori di 77,47 euro.</em></p>
+                            <p><em>Operazione esclusa da IVA ai sensi dell'art. 5 del D.P.R. 633/72.</em></p>
+                            
+                            <p style="margin-top: 20px;">
+                                • Il sottoscritto dichiara che, nell'anno solare in corso, <strong>alla data odierna</strong>:
+                            </p>
+                            <p>
+                                non ha conseguito redditi derivanti dall'esercizio di attività di lavoro autonomo occasionale pari o eccedenti<br>
+                                i 5.000 euro e <strong>si obbliga a comunicare l'eventuale superamento</strong> del limite annuo, anche successivamente<br>
+                                alla data odierna.
+                            </p>
+                            
+                            <div class="signature-line">
+                                <p style="text-align: center;">_________________________<br>(Firma)</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="ricevuta">
+                    <div class="ricevuta-header">
+                        <div style="text-transform: uppercase;">
+                            ${person.nome} ${person.cognome}<br>
+                            ${person.indirizzo}<br>
+                            ${person.cap} – ${person.citta} – ${person.provincia}<br>
+                            C.F. ${person.codiceFiscale}
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="ricevuta-info">
+                        <div>
+                            <strong>SPETT.LE</strong><br>
+                            OKL SRL<br>
+                            VIA MONTE PASUBIO<br>
+                            36010 – ZANE' – (VI)<br>
+                            P.I. 04433920248
+                        </div>
+                        <div style="text-align: right;">
+                            <strong>RICEVUTA NUMERO:</strong> ${numeroRicevuta}<br>
+                            <strong>DATA:</strong> ${dateStr}
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 20px 0;">
+                        <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
+                    </div>
+                    
+                    <table class="ricevuta-table">
+                        <thead>
+                            <tr>
+                                <th>DESCRIZIONE COMPENSO</th>
+                                <th style="text-align: right;">IMPORTO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
+                                <td class="amount">€ ${person.compenso.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: right;"><strong>COMPENSO LORDO</strong></td>
+                                <td class="amount"><strong>€ ${person.compenso.toFixed(2)}</strong></td>
+                            </tr>
+                            <tr>
+                                <td>RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
+                                <td class="amount">€ ${ritenuta.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: right;"><strong>NETTO A PAGARE</strong></td>
+                                <td class="amount"><strong>€ ${netto.toFixed(2)}</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="ricevuta-footer">
+                        <p><em>${needsStamp ? 'Imposta di bollo da 2,00 euro assolta sull\'originale per importi maggiori di 77,47 euro.' : ''}</em></p>
+                        <p><em>Operazione esclusa da IVA ai sensi dell'art. 5 del D.P.R. 633/72.</em></p>
+                        
+                        <p style="margin-top: 20px;">
+                            • Il sottoscritto dichiara che, nell'anno solare in corso, <strong>alla data odierna</strong>:
+                        </p>
+                        <p>
+                            non ha conseguito redditi derivanti dall'esercizio di attività di lavoro autonomo occasionale pari o eccedenti<br>
+                            i 5.000 euro e <strong>si obbliga a comunicare l'eventuale superamento</strong> del limite annuo, anche successivamente<br>
+                            alla data odierna.
+                        </p>
+                        
+                        <div class="signature-line">
+                            <p>_________________________<br>(Firma)</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function createZipLink() {
+            const { jsPDF } = window.jspdf;
+            const receipts = document.querySelectorAll('.ricevuta');
+            
+            if (receipts.length === 0) {
+                alert('Nessuna ricevuta da scaricare');
+                return;
+            }
+            
+            // Mostra progress bar
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const downloadBtn = document.getElementById('downloadBtn');
+            
+            progressBar.style.display = 'block';
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = '⏳ Generazione ZIP in corso...';
+            
+            try {
+                // Crea un nuovo ZIP
+                const zip = new JSZip();
+                const pdfFolder = zip.folder("Ricevute");
+                
+                for (let i = 0; i < receipts.length; i++) {
+                    // Aggiorna progress
+                    const progress = ((i + 1) / receipts.length) * 100;
+                    progressFill.style.width = progress + '%';
+                    
+                    // Crea nuovo PDF per ogni ricevuta
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    
+                    // Renderizza ricevuta come immagine
+                    const canvas = await html2canvas(receipts[i], {
+                        scale: 2,
+                        backgroundColor: '#ffffff',
+                        logging: false
+                    });
+                    
+                    const imgData = canvas.toDataURL('image/png');
+                    
+                    // Calcola dimensioni per mantenere proporzioni
+                    const imgWidth = pdfWidth - 20; // margini di 10mm per lato
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    // Aggiungi immagine centrata
+                    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                    
+                    // Estrai info per il nome file
+                    const person = matchedData[i];
+                    const nome = findColumnValue(person.iscrizione, ['NOME', 'Nome']) || '';
+                    const cognome = findColumnValue(person.iscrizione, ['COGNOME', 'Cognome']) || '';
+                    const cf = findColumnValue(person.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE']) || '';
+                    const cfKey = cf || `${nome}_${cognome}`;
+                    const numeroRicevuta = getCurrentReceiptNumber(cfKey);
+                    
+                    // Nome file: Ricevuta_N_Cognome_Nome_CF.pdf
+                    const fileName = `Ricevuta_${numeroRicevuta}_${cognome}_${nome}_${cf}.pdf`
+                        .replace(/\s+/g, '_')
+                        .replace(/[^a-zA-Z0-9_\-\.]/g, ''); // Rimuovi caratteri speciali
+                    
+                    // Aggiungi PDF allo ZIP
+                    const pdfBlob = pdf.output('blob');
+                    pdfFolder.file(fileName, pdfBlob);
+                }
+                
+                // Genera lo ZIP
+                const content = await zip.generateAsync({ type: 'blob' });
+                
+                // Crea URL per il download
+                const url = URL.createObjectURL(content);
+                const today = new Date().toISOString().split('T')[0];
+                const zipFileName = `Ricevute_${today}.zip`;
+                
+                // Mostra il link di download
+                const linkContainer = document.getElementById('downloadLinkContainer');
+                const downloadLink = document.getElementById('downloadLink');
+                
+                downloadLink.href = url;
+                downloadLink.download = zipFileName;
+                linkContainer.style.display = 'block';
+                
+                // Scroll al link
+                linkContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+            } catch (error) {
+                console.error('Errore nella generazione del ZIP:', error);
+                alert('Si è verificato un errore nella generazione del ZIP. Riprova.');
+            } finally {
+                // Nascondi progress bar e ripristina bottone
+                progressBar.style.display = 'none';
+                progressFill.style.width = '0%';
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = '📥 Crea ZIP con PDF';
+            }
+        }
+        // Funzione per resettare i numeri progressivi
+        function resetProgressiveNumbers() {
+            if (confirm('Sei sicuro di voler resettare tutti i numeri progressivi delle ricevute?')) {
+                numeroRicevutaPerCF = {};
+                localStorage.removeItem('numeroRicevutaPerCF');
+                alert('Numeri progressivi resettati!');
+            }
+        }
+    </script>
+</body>
+</html>
