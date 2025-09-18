@@ -730,8 +730,8 @@
                 
                 notMatched.forEach(item => {
                     const controparte = findColumnValue(item.movimento, ['CONTROPARTE', 'Controparte', 'BENEFICIARIO', 'Beneficiario']) || 'N/D';
-                    const importoNetto = getImportoFromMovimento(item.movimento) * 0.8;
-                    const importoLordo = getImportoFromMovimento(item.movimento);
+                    const importoLordo = getImportoSingoloMovimento(item.movimento);
+                    const importoNetto = importoLordo * 0.8;
                     
                     html += `
                         <tr>
