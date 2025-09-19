@@ -469,6 +469,7 @@
                                 H: row[7], // Città
                                 I: row[8], // Provincia
                                 J: row[9], // CAP
+                                W: row[22] // Colonna W = NOME + COGNOME (indice 22 perché W è la 23a lettera)
                             });
                         }
                     }
@@ -546,7 +547,7 @@
         }
         
         function findBestMatch(movimento, iscrizioni) {
-            const controparteColumns = ['CONTROPARTE', 'Controparte'];
+            const controparteColumns = ['CONTROPARTE', 'Controparte', 'controparte'];
             let controparte = null;
             
             for (let col of controparteColumns) {
@@ -561,17 +562,17 @@
             const controparteNorm = normalizeString(controparte);
             
             return iscrizioni.find(isc => {
-                const nome = isc.C; // Colonna C = Nome
-                const cognome = isc.B; // Colonna B = Cognome
+                // Usa la colonna W che contiene NOME + COGNOME
+                const nomeCognome = isc.W;
                 
-                if (!nome || !cognome) return false;
+                if (!nomeCognome) return false;
                 
-                const nomeNorm = normalizeString(nome);
-                const cognomeNorm = normalizeString(cognome);
+                const nomeCognomeNorm = normalizeString(nomeCognome);
                 
-                return (controparteNorm.includes(nomeNorm) && controparteNorm.includes(cognomeNorm)) ||
-                       controparteNorm === (nomeNorm + cognomeNorm) ||
-                       controparteNorm === (cognomeNorm + nomeNorm);
+                // Confronta direttamente controparte con nome+cognome dalla colonna W
+                return controparteNorm.includes(nomeCognomeNorm) || 
+                       nomeCognomeNorm.includes(controparteNorm) ||
+                       controparteNorm === nomeCognomeNorm;
             });
         }
         
