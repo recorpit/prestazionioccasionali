@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generatore Ricevute con Matching Bancario</title>
+    <title>Generatore Ricevute per Prestazioni Artistiche</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -64,7 +64,7 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
-            margin-right: 10px;
+            margin: 5px;
         }
         
         button:hover {
@@ -74,14 +74,6 @@
         button:disabled {
             background-color: #ccc;
             cursor: not-allowed;
-        }
-        
-        .secondary-btn {
-            background-color: #2196F3;
-        }
-        
-        .secondary-btn:hover {
-            background-color: #1976D2;
         }
         
         .info-box {
@@ -198,6 +190,13 @@
             text-align: right;
         }
         
+        .signature {
+            font-family: "Brush Script MT", cursive;
+            color: #003d7a;
+            font-size: 18px;
+            font-style: italic;
+        }
+        
         .no-print {
             display: block;
         }
@@ -280,14 +279,16 @@
 </head>
 <body>
     <div class="container no-print">
-        <h1>🎨 Generatore Ricevute per Prestazioni Artistiche</h1>
+        <h1>Generatore Ricevute per Prestazioni Artistiche</h1>
         <p>Sistema automatizzato per generare ricevute incrociando dati anagrafici e movimenti bancari</p>
         
         <!-- Step 1: Carica file iscrizioni -->
         <div class="step" id="step1">
-            <h2>📁 Step 1: Carica File Iscrizioni</h2>
+            <h2>Step 1: Carica File Iscrizioni</h2>
             <div class="info-box">
-                <strong>Formato richiesto:</strong> File Excel (.xlsx) contenente i dati anagrafici degli artisti
+                <strong>Formato richiesto:</strong> File Excel (.xlsx) con struttura:<br>
+                Colonna A: Codice Fiscale | Colonna B: Cognome | Colonna C: Nome<br>
+                Colonna G: Indirizzo | Colonna H: Città | Colonna I: Provincia | Colonna J: CAP
             </div>
             <input type="file" id="iscrizioniFile" accept=".xlsx,.xls">
             <button onclick="loadIscrizioni()">Carica Iscrizioni</button>
@@ -296,10 +297,10 @@
         
         <!-- Step 2: Carica movimenti bancari -->
         <div class="step inactive" id="step2">
-            <h2>💳 Step 2: Carica Movimenti Bancari</h2>
+            <h2>Step 2: Carica Movimenti Bancari</h2>
             <div class="info-box">
-                <strong>⚠️ Nota importante:</strong> Gli importi nei movimenti bancari sono considerati come <strong>NETTI</strong> (già al netto della ritenuta del 20%).<br>
-                Il sistema calcolerà automaticamente il compenso lordo = importo netto ÷ 0,8
+                <strong>Nota importante:</strong> Gli importi nei movimenti bancari sono considerati come <strong>TOTALI</strong> (inclusi eventuali rimborsi spese).<br>
+                Il sistema calcolerà automaticamente rimborsi spese e ritenute.
             </div>
             <input type="file" id="movimentiFile" accept=".xlsx,.xls" disabled>
             <button onclick="loadMovimenti()" disabled id="loadMovimentiBtn">Carica Movimenti</button>
@@ -308,27 +309,32 @@
         
         <!-- Step 3: Matching e generazione -->
         <div class="step inactive" id="step3">
-            <h2>🔄 Step 3: Matching e Generazione Ricevute</h2>
+            <h2>Step 3: Matching e Generazione Ricevute</h2>
             <button onclick="performMatching()" disabled id="matchBtn">Esegui Matching</button>
             <button onclick="generateReceipts()" disabled id="generateBtn">Genera Ricevute</button>
-            <button onclick="createZipLink()" disabled id="downloadBtn" class="secondary-btn">📥 Crea ZIP con PDF</button>
-            <button onclick="exportDatiFiscali()" disabled id="exportBtn" class="secondary-btn" style="background-color: #673ab7;">📊 Esporta Excel</button>
-            <button onclick="resetProgressiveNumbers()" class="secondary-btn" style="background-color: #ff9800;">🔄 Reset Numerazione</button>
             
-            <div id="downloadLinkContainer" style="margin-top: 20px; display: none;">
-                <div class="success-box">
-                    <strong>✓ ZIP generato con successo!</strong><br>
-                    <a id="downloadLink" href="#" download="" style="font-size: 18px; color: #4CAF50; font-weight: bold;">
-                        📥 Clicca qui per scaricare il file ZIP
-                    </a>
-                </div>
+            <div style="margin-top: 10px;">
+                <button onclick="createZipWithPDFs()" id="downloadBtn" 
+                        style="background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                    Crea ZIP con PDF
+                </button>
+                
+                <button onclick="exportToExcel()" 
+                        style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                    Esporta Excel
+                </button>
+                
+                <button onclick="resetAllCounters()" 
+                        style="background: #fd7e14; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                    Reset Numerazione
+                </button>
             </div>
             
             <div class="progress-bar" id="progressBar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
-
-            <div id="exportStatus"></div>
+            
+            <div id="downloadArea"></div>
             
             <div class="tabs" style="margin-top: 20px;">
                 <button class="tab active" onclick="showTab('matching')">Risultati Matching</button>
@@ -350,37 +356,70 @@
     <script>
         let iscrizioniData = [];
         let movimentiData = [];
-        let matchedData = [];
-        const MONTH_NAMES = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+        let results = [];
         
-        // Memoria dei numeri di ricevuta per CF
-        let numeroRicevutaPerCF = {};
-        if (localStorage.getItem('numeroRicevutaPerCF')) {
-            numeroRicevutaPerCF = JSON.parse(localStorage.getItem('numeroRicevutaPerCF'));
+        // Memoria locale per numeri progressivi e importi annuali
+        function saveToLocalStorage() {
+            localStorage.setItem('numeroRicevutaPerCF', JSON.stringify(numeroRicevutaPerCF));
+            localStorage.setItem('importiAnnualiPerCF', JSON.stringify(importiAnnualiPerCF));
         }
         
-        // Funzione per ottenere il prossimo numero di ricevuta per un CF
+        let numeroRicevutaPerCF = JSON.parse(localStorage.getItem('numeroRicevutaPerCF')) || {};
+        let importiAnnualiPerCF = JSON.parse(localStorage.getItem('importiAnnualiPerCF')) || {};
+        
         function getNextReceiptNumber(cf) {
             if (!numeroRicevutaPerCF[cf]) {
                 numeroRicevutaPerCF[cf] = 0;
             }
             numeroRicevutaPerCF[cf]++;
-            // Salva in localStorage per persistenza
-            localStorage.setItem('numeroRicevutaPerCF', JSON.stringify(numeroRicevutaPerCF));
+            saveToLocalStorage();
             return numeroRicevutaPerCF[cf];
         }
         
-        // Funzione per ottenere il numero corrente senza incrementare
         function getCurrentReceiptNumber(cf) {
             return numeroRicevutaPerCF[cf] || 0;
         }
         
+        function resetAllCounters() {
+            if (confirm('Sei sicuro di voler resettare tutti i numeri progressivi delle ricevute e gli importi annuali?')) {
+                numeroRicevutaPerCF = {};
+                importiAnnualiPerCF = {};
+                localStorage.removeItem('numeroRicevutaPerCF');
+                localStorage.removeItem('importiAnnualiPerCF');
+                alert('Numeri progressivi e importi annuali resettati!');
+            }
+        }
+        
+        function checkAndUpdateAnnualAmount(cf, compensoNetto) {
+            if (!importiAnnualiPerCF[cf]) {
+                importiAnnualiPerCF[cf] = 0;
+            }
+            
+            const totaleAttuale = importiAnnualiPerCF[cf];
+            const nuovoTotale = totaleAttuale + compensoNetto;
+            
+            importiAnnualiPerCF[cf] = nuovoTotale;
+            saveToLocalStorage();
+            
+            if (totaleAttuale <= 2500 && nuovoTotale > 2500) {
+                return {
+                    superaLimite: true,
+                    totaleAttuale: totaleAttuale,
+                    nuovoTotale: nuovoTotale
+                };
+            }
+            
+            return {
+                superaLimite: false,
+                totaleAttuale: totaleAttuale,
+                nuovoTotale: nuovoTotale
+            };
+        }
+        
         function showTab(tabName) {
-            // Rimuovi active da tutti i tab
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            // Attiva il tab selezionato
             event.target.classList.add('active');
             document.getElementById(tabName + 'Tab').classList.add('active');
         }
@@ -397,18 +436,35 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, {type: 'array'});
-                    
-                    // Prendi il primo foglio
                     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    iscrizioniData = XLSX.utils.sheet_to_json(firstSheet);
+                    iscrizioniData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                     
-                    // Mostra risultato
+                    // Converti array in oggetti con le chiavi delle colonne
+                    const processedData = [];
+                    for (let i = 0; i < iscrizioniData.length; i++) {
+                        const row = iscrizioniData[i];
+                        if (row.length > 0) {
+                            processedData.push({
+                                A: row[0], // CF
+                                B: row[1], // Cognome
+                                C: row[2], // Nome
+                                D: row[3],
+                                E: row[4],
+                                F: row[5],
+                                G: row[6], // Indirizzo
+                                H: row[7], // Città
+                                I: row[8], // Provincia
+                                J: row[9], // CAP
+                            });
+                        }
+                    }
+                    iscrizioniData = processedData.filter(row => row.A); // Filtra righe con CF
+                    
                     const resultDiv = document.getElementById('iscrizioniResult');
                     resultDiv.innerHTML = `
                         <div class="success-box">
                             ✓ File caricato con successo!<br>
-                            <strong>${iscrizioniData.length}</strong> artisti trovati<br>
-                            Colonne rilevate: ${Object.keys(iscrizioniData[0] || {}).join(', ')}
+                            <strong>${iscrizioniData.length}</strong> artisti trovati
                         </div>
                     `;
                     
@@ -416,9 +472,6 @@
                     document.getElementById('step2').classList.remove('inactive');
                     document.getElementById('movimentiFile').disabled = false;
                     document.getElementById('loadMovimentiBtn').disabled = false;
-                    
-                    // Mostra anteprima
-                    showDataPreview(iscrizioniData.slice(0, 5), resultDiv, 'Anteprima primi 5 artisti:');
                     
                 } catch (error) {
                     document.getElementById('iscrizioniResult').innerHTML = `
@@ -443,27 +496,20 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, {type: 'array'});
-                    
-                    // Prendi il primo foglio
                     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                     movimentiData = XLSX.utils.sheet_to_json(firstSheet);
                     
-                    // Mostra risultato
                     const resultDiv = document.getElementById('movimentiResult');
                     resultDiv.innerHTML = `
                         <div class="success-box">
                             ✓ File caricato con successo!<br>
-                            <strong>${movimentiData.length}</strong> movimenti trovati<br>
-                            Colonne rilevate: ${Object.keys(movimentiData[0] || {}).join(', ')}
+                            <strong>${movimentiData.length}</strong> movimenti trovati
                         </div>
                     `;
                     
                     // Abilita step 3
                     document.getElementById('step3').classList.remove('inactive');
                     document.getElementById('matchBtn').disabled = false;
-                    
-                    // Mostra anteprima
-                    showDataPreview(movimentiData.slice(0, 5), resultDiv, 'Anteprima primi 5 movimenti:');
                     
                 } catch (error) {
                     document.getElementById('movimentiResult').innerHTML = `
@@ -476,110 +522,50 @@
             reader.readAsArrayBuffer(file);
         }
         
-        function showDataPreview(data, container, title) {
-            if (data.length === 0) return;
-            
-            let html = `<h4>${title}</h4><table><thead><tr>`;
-            
-            // Header
-            Object.keys(data[0]).forEach(key => {
-                html += `<th>${key}</th>`;
-            });
-            html += '</tr></thead><tbody>';
-            
-            // Rows
-            data.forEach(row => {
-                html += '<tr>';
-                Object.values(row).forEach(value => {
-                    html += `<td>${value || ''}</td>`;
-                });
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table>';
-            
-            const previewDiv = document.createElement('div');
-            previewDiv.innerHTML = html;
-            container.appendChild(previewDiv);
-        }
-        
         function normalizeString(str) {
             if (!str) return '';
             return str.toString()
                 .toLowerCase()
                 .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '') // Rimuove accenti
-                .replace(/[^a-z0-9]/g, ''); // Rimuove caratteri speciali
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]/g, '');
         }
         
         function findBestMatch(movimento, iscrizioni) {
-            // Prova a matchare per codice fiscale se presente
-            const cfColumns = ['CODICE FISCALE', 'CF', 'CODICEFISCALE', 'C.F.', 'Codice Fiscale'];
-            const movimentoCF = findColumnValue(movimento, cfColumns);
+            const controparteColumns = ['CONTROPARTE', 'Controparte'];
+            let controparte = null;
             
-            if (movimentoCF) {
-                const match = iscrizioni.find(isc => {
-                    const iscCF = findColumnValue(isc, cfColumns);
-                    return iscCF && normalizeString(iscCF) === normalizeString(movimentoCF);
-                });
-                if (match) return match;
-            }
-            
-            // Prova a matchare per CONTROPARTE
-            const controparteColumns = ['CONTROPARTE', 'Controparte', 'BENEFICIARIO', 'Beneficiario'];
-            const nomeColumns = ['NOME', 'Nome', 'nome'];
-            const cognomeColumns = ['COGNOME', 'Cognome', 'cognome'];
-            
-            const controparte = findColumnValue(movimento, controparteColumns);
-            
-            if (controparte) {
-                const controparteNorm = normalizeString(controparte);
-                
-                // Cerca match con nome+cognome o cognome+nome
-                return iscrizioni.find(isc => {
-                    const iscNome = findColumnValue(isc, nomeColumns);
-                    const iscCognome = findColumnValue(isc, cognomeColumns);
-                    
-                    if (!iscNome || !iscCognome) return false;
-                    
-                    const nomeNorm = normalizeString(iscNome);
-                    const cognomeNorm = normalizeString(iscCognome);
-                    
-                    // Prova nome+cognome
-                    const nomeCognome = nomeNorm + cognomeNorm;
-                    const cognomeNome = cognomeNorm + nomeNorm;
-                    
-                    // Verifica se la controparte contiene nome e cognome in qualsiasi ordine
-                    return (controparteNorm.includes(nomeNorm) && controparteNorm.includes(cognomeNorm)) ||
-                           controparteNorm === nomeCognome ||
-                           controparteNorm === cognomeNome;
-                });
-            }
-            
-            return null;
-        }
-        
-        function findColumnValue(row, possibleColumns) {
-            for (let col of possibleColumns) {
-                if (row[col] !== undefined && row[col] !== null && row[col] !== '') {
-                    return row[col];
-                }
-            }
-            // Prova anche con le chiavi esatte dell'oggetto
-            for (let key of Object.keys(row)) {
-                if (possibleColumns.some(col => key.toUpperCase().includes(col.toUpperCase()))) {
-                    return row[key];
-                }
-            }
-            return null;
-        }
-        
-        function getImportoSingoloMovimento(movimento) {
-            const importoColumns = ['IMPORTO', 'Importo', 'ACCREDITI', 'Accrediti', 'ADDEBITI', 'Addebiti', 'ADDEBITO', 'Addebito', 'DARE', 'Dare', 'USCITE', 'Uscite', 'AVERE', 'Avere'];
-
-            for (let col of importoColumns) {
+            for (let col of controparteColumns) {
                 if (movimento[col]) {
-                    // Converti in numero
+                    controparte = movimento[col];
+                    break;
+                }
+            }
+            
+            if (!controparte) return null;
+            
+            const controparteNorm = normalizeString(controparte);
+            
+            return iscrizioni.find(isc => {
+                const nome = isc.C; // Colonna C = Nome
+                const cognome = isc.B; // Colonna B = Cognome
+                
+                if (!nome || !cognome) return false;
+                
+                const nomeNorm = normalizeString(nome);
+                const cognomeNorm = normalizeString(cognome);
+                
+                return (controparteNorm.includes(nomeNorm) && controparteNorm.includes(cognomeNorm)) ||
+                       controparteNorm === (nomeNorm + cognomeNorm) ||
+                       controparteNorm === (cognomeNorm + nomeNorm);
+            });
+        }
+        
+        function getImportoFromMovimento(movimento) {
+            const importoColumns = ['IMPORTO', 'Importo', 'ACCREDITI', 'Accrediti', 'ADDEBITI', 'Addebiti', 'ADDEBITO', 'Addebito'];
+            
+            for (let col of importoColumns) {
+                if (movimento[col] !== undefined && movimento[col] !== null) {
                     let value = movimento[col];
                     if (typeof value === 'string') {
                         value = value.replace(/[^\d,-]/g, '').replace(',', '.');
@@ -587,320 +573,147 @@
                     return Math.abs(parseFloat(value)) || 0;
                 }
             }
-
             return 0;
         }
-
-        function calculateRimborsoSpese(totaleMovimenti) {
-            const totale = typeof totaleMovimenti === 'number' ? totaleMovimenti : parseFloat(totaleMovimenti);
-            if (!totale || totale <= 0) return 0;
-            if (totale >= 500) return 200;
-            if (totale >= 300) return 100;
-            if (totale >= 100) return 40;
-            return 0;
-        }
-
-        function getImportoFromMovimento(movimento) {
-            return getImportoSingoloMovimento(movimento);
-        }
-
-        function parseExcelDate(value) {
-            if (value === undefined || value === null || value === '') {
-                return null;
-            }
-
-            if (value instanceof Date && !isNaN(value.getTime())) {
-                return value;
-            }
-
-            if (typeof value === 'number' && !isNaN(value)) {
-                const epoch = new Date(Date.UTC(1899, 11, 30));
-                const days = Math.floor(value);
-                const milliseconds = Math.round((value - days) * 86400 * 1000);
-                const date = new Date(epoch.getTime() + (days * 86400 * 1000) + milliseconds);
-                return isNaN(date.getTime()) ? null : date;
-            }
-
-            if (typeof value === 'string') {
-                const cleaned = value.trim();
-                if (!cleaned) return null;
-
-                const isoDate = new Date(cleaned);
-                if (!isNaN(isoDate.getTime())) {
-                    return isoDate;
-                }
-
-                const normalized = cleaned.replace(/\./g, '/').replace(/-/g, '/');
-                const parts = normalized.split('/');
-
-                if (parts.length === 3) {
-                    let day, month, year;
-
-                    if (parts[0].length === 4) {
-                        year = parseInt(parts[0], 10);
-                        month = parseInt(parts[1], 10) - 1;
-                        day = parseInt(parts[2], 10);
-                    } else {
-                        day = parseInt(parts[0], 10);
-                        month = parseInt(parts[1], 10) - 1;
-                        year = parseInt(parts[2], 10);
-
-                        if (year < 100) {
-                            year += year < 50 ? 2000 : 1900;
-                        }
-                    }
-
-                    const parsed = new Date(year, month, day);
-                    return isNaN(parsed.getTime()) ? null : parsed;
-                }
-            }
-
-            return null;
-        }
-
-        function getMovimentoDate(movimento) {
-            const dateColumns = ['DATA', 'Data', 'DATA CONTABILE', 'Data Contabile', 'DATA VALUTA', 'Data Valuta', 'DATA OPERAZIONE', 'Data Operazione', 'DATA MOVIMENTO', 'Data Movimento'];
-
+        
+        function getDataFromMovimento(movimento) {
+            const dateColumns = ['DATA', 'Data', 'DATA VALUTA', 'Data Valuta', 'DATA OPERAZIONE', 'Data Operazione'];
+            
             for (let col of dateColumns) {
                 if (movimento[col]) {
-                    const parsed = parseExcelDate(movimento[col]);
-                    if (parsed) return parsed;
+                    let dateValue = movimento[col];
+                    
+                    if (dateValue instanceof Date) return dateValue;
+                    
+                    if (typeof dateValue === 'number') {
+                        const excelEpoch = new Date(1900, 0, 1);
+                        const days = dateValue - 2;
+                        return new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
+                    }
+                    
+                    if (typeof dateValue === 'string') {
+                        const italianMatch = dateValue.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                        if (italianMatch) {
+                            return new Date(italianMatch[3], italianMatch[2] - 1, italianMatch[1]);
+                        }
+                        
+                        const parsed = new Date(dateValue);
+                        if (!isNaN(parsed.getTime())) {
+                            return parsed;
+                        }
+                    }
                 }
             }
-
-            for (let key of Object.keys(movimento)) {
-                if (dateColumns.some(col => key.toUpperCase().includes(col.replace(/\s+/g, '').toUpperCase()))) {
-                    const parsed = parseExcelDate(movimento[key]);
-                    if (parsed) return parsed;
-                }
-            }
-
-            return null;
+            
+            return new Date();
         }
-
-        function sanitizeSheetName(name) {
-            if (!name) return 'Dati';
-            const sanitized = name.toString().replace(/[\\?*\[\]:/]/g, '_');
-            const trimmed = sanitized.trim();
-            return trimmed.substring(0, 31) || 'Dati';
-        }
-
-        function formatDateItalian(date) {
-            if (!date || isNaN(date.getTime())) return 'N/D';
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}/${month}/${year}`;
-        }
-
-        function roundToTwo(value) {
-            const number = typeof value === 'number' ? value : parseFloat(value);
-            if (isNaN(number)) return 0;
-            return Math.round((number + Number.EPSILON) * 100) / 100;
-        }
-
-        function buildMovimentiDetail(movimenti) {
-            if (!movimenti || movimenti.length === 0) return '';
-            return movimenti.map(entry => {
-                const dateStr = entry.date ? formatDateItalian(entry.date) : 'N/D';
-                return `${dateStr} - € ${roundToTwo(entry.importo).toFixed(2)}`;
-            }).join(' | ');
-        }
-
-        function getMonthInfo(date) {
-            if (date && !isNaN(date.getTime())) {
-                const year = date.getFullYear();
-                const month = date.getMonth();
-                const key = `${year}-${String(month + 1).padStart(2, '0')}`;
-                return {
-                    key,
-                    label: `${MONTH_NAMES[month]} ${year}`,
-                    sheetName: sanitizeSheetName(`${year}_${String(month + 1).padStart(2, '0')}`),
-                    sortValue: new Date(year, month, 1).getTime()
-                };
-            }
-
-            return {
-                key: 'SENZA_DATA',
-                label: 'Senza data',
-                sheetName: sanitizeSheetName('Senza_data'),
-                sortValue: Number.MAX_SAFE_INTEGER
-            };
-        }
-
-        function splitMatchedDataByMonth(data) {
-            const monthMap = {};
-
-            data.forEach(item => {
-                const personInfo = {
-                    nome: findColumnValue(item.iscrizione, ['NOME', 'Nome']) || '',
-                    cognome: findColumnValue(item.iscrizione, ['COGNOME', 'Cognome']) || '',
-                    indirizzo: findColumnValue(item.iscrizione, ['INDIRIZZO', 'Indirizzo', 'VIA', 'Via']) || '',
-                    cap: findColumnValue(item.iscrizione, ['CAP', 'C.A.P.']) || '',
-                    citta: findColumnValue(item.iscrizione, ['CITTA', 'CITTÀ', 'Citta', 'Città', 'COMUNE', 'Comune']) || '',
-                    provincia: findColumnValue(item.iscrizione, ['PROVINCIA', 'PROV', 'Provincia', 'Prov']) || '',
-                    codiceFiscale: findColumnValue(item.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE', 'C.F.']) || ''
-                };
-
-                const monthlyGroups = {};
-
-                (item.movimenti || []).forEach(movimento => {
-                    const amount = getImportoSingoloMovimento(movimento);
-                    if (!amount) return;
-
-                    const movimentoDate = getMovimentoDate(movimento);
-                    const monthInfo = getMonthInfo(movimentoDate);
-
-                    if (!monthlyGroups[monthInfo.key]) {
-                        monthlyGroups[monthInfo.key] = {
-                            key: monthInfo.key,
-                            label: monthInfo.label,
-                            sheetName: monthInfo.sheetName,
-                            sortValue: monthInfo.sortValue,
-                            totaleMovimenti: 0,
-                            movimenti: [],
-                            earliestDate: null
-                        };
-                    }
-
-                    monthlyGroups[monthInfo.key].totaleMovimenti += amount;
-                    monthlyGroups[monthInfo.key].movimenti.push({ movimento, importo: amount, date: movimentoDate });
-
-                    if (movimentoDate && (!monthlyGroups[monthInfo.key].earliestDate || movimentoDate < monthlyGroups[monthInfo.key].earliestDate)) {
-                        monthlyGroups[monthInfo.key].earliestDate = movimentoDate;
-                    }
-                });
-
-                if (Object.keys(monthlyGroups).length === 0) {
-                    const fallbackInfo = getMonthInfo(null);
-                    monthlyGroups[fallbackInfo.key] = {
-                        key: fallbackInfo.key,
-                        label: fallbackInfo.label,
-                        sheetName: fallbackInfo.sheetName,
-                        sortValue: fallbackInfo.sortValue,
-                        totaleMovimenti: item.movimentoBancario || 0,
-                        movimenti: [],
-                        earliestDate: null
-                    };
-                }
-
-                Object.values(monthlyGroups).forEach(group => {
-                    const rimborsoSpese = calculateRimborsoSpese(group.totaleMovimenti);
-                    const compensoNetto = group.totaleMovimenti - rimborsoSpese;
-                    const compensoLordo = compensoNetto / 0.8;
-                    const ritenuta = compensoLordo * 0.2;
-                    const nettoDaCorrisp = compensoNetto + rimborsoSpese;
-
-                    const row = {
-                        monthKey: group.key,
-                        monthLabel: group.label,
-                        sheetName: group.sheetName,
-                        sortValue: group.sortValue,
-                        paymentDate: group.earliestDate,
-                        totaleMovimenti: roundToTwo(group.totaleMovimenti),
-                        rimborsoSpese: roundToTwo(rimborsoSpese),
-                        compensoLordo: roundToTwo(compensoLordo),
-                        ritenuta: roundToTwo(ritenuta),
-                        nettoDaCorrisp: roundToTwo(nettoDaCorrisp),
-                        numeroMovimenti: group.movimenti.length || (item.movimenti ? item.movimenti.length : 0),
-                        dettaglioMovimenti: buildMovimentiDetail(group.movimenti),
-                        person: personInfo
-                    };
-
-                    if (!monthMap[row.monthKey]) {
-                        monthMap[row.monthKey] = {
-                            key: row.monthKey,
-                            label: row.monthLabel,
-                            sheetName: row.sheetName,
-                            sortValue: row.sortValue,
-                            rows: []
-                        };
-                    }
-
-                    monthMap[row.monthKey].rows.push(row);
-                });
-            });
-
-            return Object.values(monthMap).map(section => {
-                section.rows.sort((a, b) => {
-                    const cognomeA = a.person.cognome || '';
-                    const cognomeB = b.person.cognome || '';
-                    const cognomeComparison = cognomeA.localeCompare(cognomeB, 'it', { sensitivity: 'base' });
-                    if (cognomeComparison !== 0) return cognomeComparison;
-                    const nomeA = a.person.nome || '';
-                    const nomeB = b.person.nome || '';
-                    return nomeA.localeCompare(nomeB, 'it', { sensitivity: 'base' });
-                });
-                section.sheetName = sanitizeSheetName(section.sheetName);
-                return section;
-            }).sort((a, b) => a.sortValue - b.sortValue);
-        }
-
+        
         function performMatching() {
             let matchedMovimenti = [];
             let notMatched = [];
-
-            const exportStatus = document.getElementById('exportStatus');
-            if (exportStatus) {
-                exportStatus.innerHTML = '';
-            }
-
-            // Prima fase: trova tutti i match
+            
+            console.log('Inizio matching con', movimentiData.length, 'movimenti e', iscrizioniData.length, 'iscrizioni');
+            
             movimentiData.forEach((movimento, index) => {
                 const match = findBestMatch(movimento, iscrizioniData);
+                const importo = getImportoFromMovimento(movimento);
+                const data = getDataFromMovimento(movimento);
                 
                 if (match) {
                     matchedMovimenti.push({
                         movimento: movimento,
                         iscrizione: match,
-                        importoMovimento: getImportoSingoloMovimento(movimento),
-                        matchStatus: 'found'
+                        importoMovimento: importo,
+                        data: data
                     });
                 } else {
-                    notMatched.push({
-                        movimento: movimento,
-                        matchStatus: 'not_found'
-                    });
+                    notMatched.push({ movimento: movimento });
                 }
             });
             
-            // Seconda fase: raggruppa per persona (usando CF come chiave)
-            const gruppiPerPersona = {};
+            console.log('Match trovati:', matchedMovimenti.length);
+            
+            // Raggruppa per persona E per mese
+            const gruppiPerPersonaMese = {};
             
             matchedMovimenti.forEach(item => {
-                const cf = findColumnValue(item.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE']) || 
-                          `${findColumnValue(item.iscrizione, ['NOME', 'Nome'])}_${findColumnValue(item.iscrizione, ['COGNOME', 'Cognome'])}`;
+                const cf = item.iscrizione.A || `${item.iscrizione.C}_${item.iscrizione.B}`;
+                const mese = item.data.getMonth() + 1;
+                const anno = item.data.getFullYear();
+                const chiaveMese = `${cf}_${anno}_${mese}`;
                 
-                if (!gruppiPerPersona[cf]) {
-                    gruppiPerPersona[cf] = {
+                if (!gruppiPerPersonaMese[chiaveMese]) {
+                    gruppiPerPersonaMese[chiaveMese] = {
                         iscrizione: item.iscrizione,
                         movimenti: [],
-                        totaleMovimenti: 0
+                        totaleMovimenti: 0,
+                        mese: mese,
+                        anno: anno,
+                        cf: cf
                     };
                 }
                 
-                gruppiPerPersona[cf].movimenti.push(item.movimento);
-                gruppiPerPersona[cf].totaleMovimenti += item.importoMovimento;
+                gruppiPerPersonaMese[chiaveMese].movimenti.push(item.movimento);
+                gruppiPerPersonaMese[chiaveMese].totaleMovimenti += item.importoMovimento;
             });
             
-            // Converti in array e calcola rimborsi sul totale
-            matchedData = Object.values(gruppiPerPersona).map(gruppo => {
-                const rimborsoSpese = calculateRimborsoSpese(gruppo.totaleMovimenti);
-
-                // Il compenso netto è: totale movimenti - rimborso spese
-                const compensoNetto = gruppo.totaleMovimenti - rimborsoSpese;
-
-                // Calcola il lordo dal compenso netto
-                const compensoLordo = compensoNetto / 0.8;
+            // Gestione compensazioni tra mesi
+            const gruppiPerCF = {};
+            Object.values(gruppiPerPersonaMese).forEach(gruppo => {
+                if (!gruppiPerCF[gruppo.cf]) {
+                    gruppiPerCF[gruppo.cf] = [];
+                }
+                gruppiPerCF[gruppo.cf].push(gruppo);
+            });
+            
+            results = [];
+            
+            Object.values(gruppiPerCF).forEach(gruppiPersona => {
+                gruppiPersona.sort((a, b) => {
+                    if (a.anno !== b.anno) return a.anno - b.anno;
+                    return a.mese - b.mese;
+                });
                 
-                return {
-                    iscrizione: gruppo.iscrizione,
-                    movimenti: gruppo.movimenti,
-                    movimentoBancario: gruppo.totaleMovimenti,
-                    importo: compensoLordo,
-                    rimborsoSpese: rimborsoSpese,
-                    matchStatus: 'found'
-                };
+                let creditoResiduo = 0;
+                
+                gruppiPersona.forEach(gruppo => {
+                    let totaleNetto = gruppo.totaleMovimenti + creditoResiduo;
+                    
+                    if (totaleNetto > 0) {
+                        // Calcola rimborso spese
+                        let rimborsoSpese = 0;
+                        if (totaleNetto >= 500) {
+                            rimborsoSpese = 200;
+                        } else if (totaleNetto >= 300) {
+                            rimborsoSpese = 100;
+                        } else if (totaleNetto >= 100) {
+                            rimborsoSpese = 40;
+                        }
+                        
+                        const compensoNetto = totaleNetto - rimborsoSpese;
+                        const compensoLordo = compensoNetto / 0.8;
+                        
+                        results.push({
+                            nome: gruppo.iscrizione.C,
+                            cognome: gruppo.iscrizione.B,
+                            codiceFiscale: gruppo.iscrizione.A,
+                            indirizzo: gruppo.iscrizione.G,
+                            cap: gruppo.iscrizione.J,
+                            citta: gruppo.iscrizione.H,
+                            provincia: gruppo.iscrizione.I,
+                            compenso: compensoLordo,
+                            rimborsoSpese: rimborsoSpese,
+                            movimentoBancario: totaleNetto,
+                            mese: gruppo.mese,
+                            anno: gruppo.anno,
+                            movimenti: gruppo.movimenti
+                        });
+                        
+                        creditoResiduo = 0;
+                    } else if (totaleNetto < 0) {
+                        creditoResiduo = totaleNetto;
+                    }
+                });
             });
             
             // Mostra risultati
@@ -908,55 +721,47 @@
             let html = `
                 <div class="info-box">
                     <strong>Risultati del matching:</strong><br>
-                    ✓ Persone con pagamenti: ${matchedData.length}<br>
+                    ✓ Ricevute da generare: ${results.length}<br>
                     ✓ Movimenti matchati: ${matchedMovimenti.length}<br>
-                    ✗ Non matchati: ${notMatched.length}<br>
-                    Totale movimenti: ${movimentiData.length}
+                    ✗ Non matchati: ${notMatched.length}
                 </div>
             `;
             
-            if (matchedData.length > 0) {
+            if (results.length > 0) {
                 html += `
-                    <h4>Ricevute da generare (raggruppate per persona):</h4>
+                    <h4>Ricevute da generare (divise per mese):</h4>
                     <table>
                         <thead>
                             <tr>
                                 <th>Nome</th>
                                 <th>Cognome</th>
-                                <th>Codice Fiscale</th>
-                                <th>N° Movimenti</th>
-                                <th>Dettagli Importi</th>
+                                <th>CF</th>
+                                <th>Mese/Anno</th>
+                                <th>N° Mov.</th>
+                                <th>Totale</th>
+                                <th>Rimborso</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
                 `;
                 
-                matchedData.forEach(item => {
-                    const nome = findColumnValue(item.iscrizione, ['NOME', 'Nome']);
-                    const cognome = findColumnValue(item.iscrizione, ['COGNOME', 'Cognome']);
-                    const cf = findColumnValue(item.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE']);
-                    const compensoNetto = item.importo * 0.8;
-                    const numMovimenti = item.movimenti.length;
-                    
+                results.forEach(item => {
                     html += `
                         <tr>
-                            <td>${nome || ''}</td>
-                            <td>${cognome || ''}</td>
-                            <td>${cf || ''}</td>
-                            <td>${numMovimenti}</td>
-                            <td>Totale movimenti: € ${item.movimentoBancario.toFixed(2)}<br>
-                                ${item.rimborsoSpese > 0 ? `Rimborso spese: € ${item.rimborsoSpese.toFixed(2)}<br>` : ''}
-                                Compenso lordo: € ${item.importo.toFixed(2)}<br>
-                                Compenso netto: € ${compensoNetto.toFixed(2)}</td>
-                            <td><span class="match-status ${numMovimenti > 1 ? 'match-multiple' : 'match-found'}">${numMovimenti > 1 ? 'Multiplo' : 'Singolo'}</span></td>
+                            <td>${item.nome || ''}</td>
+                            <td>${item.cognome || ''}</td>
+                            <td>${item.codiceFiscale || ''}</td>
+                            <td>${item.mese}/${item.anno}</td>
+                            <td>${item.movimenti.length}</td>
+                            <td>€ ${item.movimentoBancario.toFixed(2)}</td>
+                            <td>€ ${item.rimborsoSpese.toFixed(2)}</td>
+                            <td><span class="match-status match-found">OK</span></td>
                         </tr>
                     `;
                 });
                 
                 html += '</tbody></table>';
-                
-                // Abilita generazione ricevute
                 document.getElementById('generateBtn').disabled = false;
             }
             
@@ -968,39 +773,31 @@
                             <tr>
                                 <th>Controparte</th>
                                 <th>Importo</th>
-                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
                 `;
                 
                 notMatched.forEach(item => {
-                    const controparte = findColumnValue(item.movimento, ['CONTROPARTE', 'Controparte', 'BENEFICIARIO', 'Beneficiario']) || 'N/D';
-                    const importoLordo = getImportoSingoloMovimento(item.movimento);
-                    const importoNetto = importoLordo * 0.8;
+                    const controparte = item.movimento.CONTROPARTE || item.movimento.Controparte || 'N/D';
+                    const importo = getImportoFromMovimento(item.movimento);
                     
                     html += `
                         <tr>
                             <td>${controparte}</td>
-                            <td>€ ${importoLordo.toFixed(2)} (netto: € ${importoNetto.toFixed(2)})</td>
-                            <td><span class="match-status match-not-found">Non trovato</span></td>
+                            <td>€ ${importo.toFixed(2)}</td>
                         </tr>
                     `;
                 });
                 
                 html += '</tbody></table>';
             }
-
+            
             resultDiv.innerHTML = html;
-
-            const exportButton = document.getElementById('exportBtn');
-            if (exportButton) {
-                exportButton.disabled = matchedData.length === 0;
-            }
         }
         
         function generateReceipts() {
-            if (matchedData.length === 0) {
+            if (results.length === 0) {
                 alert('Nessun match trovato per generare ricevute');
                 return;
             }
@@ -1011,73 +808,105 @@
             container.innerHTML = '';
             previewContainer.innerHTML = '<h4>Anteprima Ricevute Generate:</h4>';
             
-            matchedData.forEach((item, index) => {
-                const person = {
-                    nome: findColumnValue(item.iscrizione, ['NOME', 'Nome']) || '',
-                    cognome: findColumnValue(item.iscrizione, ['COGNOME', 'Cognome']) || '',
-                    indirizzo: findColumnValue(item.iscrizione, ['INDIRIZZO', 'Indirizzo', 'VIA', 'Via']) || '',
-                    cap: findColumnValue(item.iscrizione, ['CAP', 'C.A.P.']) || '',
-                    citta: findColumnValue(item.iscrizione, ['CITTA', 'CITTÀ', 'Citta', 'Città', 'COMUNE', 'Comune']) || '',
-                    provincia: findColumnValue(item.iscrizione, ['PROVINCIA', 'PROV', 'Provincia', 'Prov']) || '',
-                    codiceFiscale: findColumnValue(item.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE', 'C.F.']) || '',
-                    compenso: item.importo,
-                    rimborsoSpese: item.rimborsoSpese,
-                    movimentoBancario: item.movimentoBancario
-                };
+            let alertiSuperamento = [];
+            
+            results.forEach((person, index) => {
+                // Controllo limite €2.500
+                const compensoNetto = person.compenso * 0.8;
+                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                const risultatoControllo = checkAndUpdateAnnualAmount(cfKey, compensoNetto);
                 
-                const receipt = generateReceipt(person, item);
+                if (risultatoControllo.superaLimite) {
+                    alertiSuperamento.push({
+                        nome: person.nome,
+                        cognome: person.cognome,
+                        cf: person.codiceFiscale,
+                        totalePrec: risultatoControllo.totaleAttuale,
+                        nuovoTotale: risultatoControllo.nuovoTotale,
+                        compensoRicevuta: compensoNetto
+                    });
+                }
+                
+                const receipt = generateReceipt(person);
                 container.innerHTML += receipt;
                 
-                // Aggiungi anteprima - usa getCurrentReceiptNumber per vedere il numero appena assegnato
-                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                // Anteprima
                 const numeroRicevuta = getCurrentReceiptNumber(cfKey);
-                
                 const previewItem = document.createElement('div');
                 previewItem.style.cssText = 'border: 1px solid #ddd; padding: 10px; margin: 10px 0; background: #f9f9f9;';
-                const totaleNetto = (person.compenso * 0.8) + person.rimborsoSpese;
+                
+                let warningHtml = '';
+                if (risultatoControllo.superaLimite) {
+                    warningHtml = '<br><span style="color: red; font-weight: bold;">⚠️ ATTENZIONE: Supera limite €2500!</span>';
+                }
+                
+                const mesi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                             'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+                
                 previewItem.innerHTML = `
                     <strong>#${numeroRicevuta} - ${person.nome} ${person.cognome}</strong><br>
                     CF: ${person.codiceFiscale}<br>
-                    ${item.movimenti.length > 1 ? `Somma di ${item.movimenti.length} movimenti<br>` : ''}
-                    Totale movimenti: € ${item.movimentoBancario.toFixed(2)}<br>
+                    Periodo: ${mesi[person.mese]} ${person.anno}<br>
+                    ${person.movimenti.length > 1 ? `Somma di ${person.movimenti.length} movimenti<br>` : ''}
+                    Totale movimenti: € ${person.movimentoBancario.toFixed(2)}<br>
                     ${person.rimborsoSpese > 0 ? `Rimborso spese: € ${person.rimborsoSpese.toFixed(2)}<br>` : ''}
                     Compenso lordo: € ${person.compenso.toFixed(2)}<br>
-                    <strong>Netto a pagare: € ${totaleNetto.toFixed(2)}</strong>
+                    <strong>Netto a pagare: € ${(person.compenso * 0.8 + person.rimborsoSpese).toFixed(2)}</strong><br>
+                    Totale annuale: € ${risultatoControllo.nuovoTotale.toFixed(2)}${warningHtml}
                 `;
                 previewContainer.appendChild(previewItem);
             });
             
-            // Abilita download PDF
+            // Mostra alert superamento
+            if (alertiSuperamento.length > 0) {
+                let messaggioAlert = '⚠️ ATTENZIONE - SUPERAMENTO LIMITE €2500 NETTI ANNUALI!\n\n';
+                messaggioAlert += 'I seguenti artisti superano il limite con questa ricevuta:\n\n';
+                
+                alertiSuperamento.forEach(alert => {
+                    messaggioAlert += `${alert.nome} ${alert.cognome} (CF: ${alert.cf})\n`;
+                    messaggioAlert += `- Totale precedente: € ${alert.totalePrec.toFixed(2)}\n`;
+                    messaggioAlert += `- Compenso questa ricevuta: € ${alert.compensoRicevuta.toFixed(2)}\n`;
+                    messaggioAlert += `- NUOVO TOTALE: € ${alert.nuovoTotale.toFixed(2)}\n\n`;
+                });
+                
+                messaggioAlert += 'Questi artisti potrebbero dover aprire Partita IVA!';
+                alert(messaggioAlert);
+            }
+            
+            // Abilita download
             document.getElementById('downloadBtn').disabled = false;
             
-            // Mostra tab anteprima
+            // Mostra tab anteprima - correzione
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            document.querySelector('.tab:last-child').classList.add('active');
+            
+            // Attiva specificamente il tab anteprima
+            const tabs = document.querySelectorAll('.tab');
+            const previewTab = tabs[1]; // Il secondo tab è l'anteprima
+            previewTab.classList.add('active');
             document.getElementById('previewTab').classList.add('active');
             
-            // Chiedi se stampare
-            setTimeout(() => {
-                if (confirm(`Generate ${matchedData.length} ricevute. Vuoi procedere con la stampa?`)) {
-                    window.print();
-                }
-            }, 500);
+            // Scorri verso l'anteprima
+            document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
         }
         
-        function generateReceipt(person, item) {
+        function generateReceipt(person) {
             const today = new Date();
             const dateStr = today.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
+            
             const ritenuta = person.compenso * 0.20;
             const compensoNetto = person.compenso - ritenuta;
-            const nettoPagare = person.movimentoBancario || (compensoNetto + person.rimborsoSpese);
+            const nettoPagare = compensoNetto + person.rimborsoSpese;
             const needsStamp = person.compenso > 77.47;
             
-            // Ottieni numero progressivo per questo CF
+            // Ottieni numero progressivo
             const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
             const numeroRicevuta = getNextReceiptNumber(cfKey);
             
-            // Se non ci sono rimborsi spese, usa il formato standard
+            const mesi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                         'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+            
+            // Formato con o senza rimborso spese
             if (person.rimborsoSpese === 0) {
                 return `
                     <div class="ricevuta">
@@ -1107,7 +936,7 @@
                         </div>
                         
                         <div style="margin: 20px 0;">
-                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
+                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO - ${mesi[person.mese]} ${person.anno}
                         </div>
                         
                         <table class="ricevuta-table">
@@ -1151,13 +980,13 @@
                             </p>
                             
                             <div class="signature-line">
-                                <p>_________________________<br>(Firma)</p>
+                                <p>_________________________<br>
+                                <span class="signature">${person.nome} ${person.cognome}</span></p>
                             </div>
                         </div>
                     </div>
                 `;
             } else {
-                // Formato con rimborso spese
                 return `
                     <div class="ricevuta">
                         <div class="ricevuta-header">
@@ -1186,7 +1015,7 @@
                         </div>
                         
                         <div style="margin: 20px 0;">
-                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
+                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO - ${mesi[person.mese]} ${person.anno}
                         </div>
                         
                         <table class="ricevuta-table">
@@ -1238,308 +1067,197 @@
                             </p>
                             
                             <div class="signature-line">
-                                <p style="text-align: center;">_________________________<br>(Firma)</p>
+                                <p style="text-align: center;">_________________________<br>
+                                <span class="signature">${person.nome} ${person.cognome}</span></p>
                             </div>
                         </div>
                     </div>
                 `;
             }
-            
-            return `
-                <div class="ricevuta">
-                    <div class="ricevuta-header">
-                        <div style="text-transform: uppercase;">
-                            ${person.nome} ${person.cognome}<br>
-                            ${person.indirizzo}<br>
-                            ${person.cap} – ${person.citta} – ${person.provincia}<br>
-                            C.F. ${person.codiceFiscale}
-                        </div>
-                    </div>
-                    
-                    <hr>
-                    
-                    <div class="ricevuta-info">
-                        <div>
-                            <strong>SPETT.LE</strong><br>
-                            OKL SRL<br>
-                            VIA MONTE PASUBIO<br>
-                            36010 – ZANE' – (VI)<br>
-                            P.I. 04433920248
-                        </div>
-                        <div style="text-align: right;">
-                            <strong>RICEVUTA NUMERO:</strong> ${numeroRicevuta}<br>
-                            <strong>DATA:</strong> ${dateStr}
-                        </div>
-                    </div>
-                    
-                    <div style="margin: 20px 0;">
-                        <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
-                    </div>
-                    
-                    <table class="ricevuta-table">
-                        <thead>
-                            <tr>
-                                <th>DESCRIZIONE COMPENSO</th>
-                                <th style="text-align: right;">IMPORTO</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
-                                <td class="amount">€ ${person.compenso.toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: right;"><strong>COMPENSO LORDO</strong></td>
-                                <td class="amount"><strong>€ ${person.compenso.toFixed(2)}</strong></td>
-                            </tr>
-                            <tr>
-                                <td>RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
-                                <td class="amount">€ ${ritenuta.toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: right;"><strong>NETTO A PAGARE</strong></td>
-                                <td class="amount"><strong>€ ${netto.toFixed(2)}</strong></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    
-                    <div class="ricevuta-footer">
-                        <p><em>${needsStamp ? 'Imposta di bollo da 2,00 euro assolta sull\'originale per importi maggiori di 77,47 euro.' : ''}</em></p>
-                        <p><em>Operazione esclusa da IVA ai sensi dell'art. 5 del D.P.R. 633/72.</em></p>
-                        
-                        <p style="margin-top: 20px;">
-                            • Il sottoscritto dichiara che, nell'anno solare in corso, <strong>alla data odierna</strong>:
-                        </p>
-                        <p>
-                            non ha conseguito redditi derivanti dall'esercizio di attività di lavoro autonomo occasionale pari o eccedenti<br>
-                            i 5.000 euro e <strong>si obbliga a comunicare l'eventuale superamento</strong> del limite annuo, anche successivamente<br>
-                            alla data odierna.
-                        </p>
-                        
-                        <div class="signature-line">
-                            <p>_________________________<br>(Firma)</p>
-                        </div>
-                    </div>
-                </div>
-            `;
         }
-
-        function exportDatiFiscali() {
-            const statusContainer = document.getElementById('exportStatus');
-            const exportButton = document.getElementById('exportBtn');
-
-            if (statusContainer) {
-                statusContainer.innerHTML = '';
-            }
-
-            if (matchedData.length === 0) {
-                if (statusContainer) {
-                    statusContainer.innerHTML = `
-                        <div class="error-box">
-                            ✗ Nessun dato da esportare. Esegui prima il matching.
-                        </div>
-                    `;
-                } else {
-                    alert('Nessun dato da esportare. Esegui prima il matching.');
-                }
+        
+        function updateProgressBar(progress) {
+            const progressFill = document.getElementById('progressFill');
+            progressFill.style.width = progress + '%';
+        }
+        
+        function createZipWithPDFs() {
+            if (results.length === 0) {
+                alert('Prima devi eseguire il matching e generare le ricevute!');
                 return;
             }
 
-            if (exportButton) {
-                exportButton.disabled = true;
-                exportButton.textContent = '⏳ Esportazione in corso...';
-            }
+            const btn = document.getElementById('downloadBtn');
+            btn.innerHTML = '⏳ Generazione ZIP in corso...';
+            btn.disabled = true;
+            document.getElementById('progressBar').style.display = 'block';
 
             try {
-                const monthlySections = splitMatchedDataByMonth(matchedData);
+                const zip = new JSZip();
+                const folder = zip.folder("Ricevute");
+                let progress = 0;
 
-                if (!monthlySections || monthlySections.length === 0) {
-                    if (statusContainer) {
-                        statusContainer.innerHTML = `
-                            <div class="error-box">
-                                ✗ Nessun dato disponibile per l'esportazione.
-                            </div>
-                        `;
-                    }
-                    return;
-                }
+                results.forEach((person, index) => {
+                    const receiptHtml = generateReceipt(person);
+                    const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                    const receiptNumber = getCurrentReceiptNumber(cfKey);
+                    
+                    // Genera PDF
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    
+                    // Converti HTML in testo per il PDF
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = receiptHtml;
+                    const text = tempDiv.textContent || tempDiv.innerText || '';
+                    
+                    pdf.setFontSize(10);
+                    const lines = pdf.splitTextToSize(text, 180);
+                    pdf.text(lines, 10, 20);
 
-                const workbook = XLSX.utils.book_new();
-                const allRows = [];
+                    const fileName = `Ricevuta_${receiptNumber}_${person.cognome}_${person.nome}_${person.codiceFiscale}.pdf`;
+                    folder.file(fileName, pdf.output('blob'));
 
-                monthlySections.forEach(section => {
-                    const sheetRows = section.rows.map(row => {
-                        const exportRow = {
-                            'Mese': row.monthLabel,
-                            'Data Pagamento': formatDateItalian(row.paymentDate),
-                            'Cognome': row.person.cognome,
-                            'Nome': row.person.nome,
-                            'Codice Fiscale': row.person.codiceFiscale,
-                            'Comune': row.person.citta,
-                            'Provincia': row.person.provincia,
-                            'Indirizzo': row.person.indirizzo,
-                            'CAP': row.person.cap,
-                            'Compenso Lordo (€)': row.compensoLordo,
-                            "Ritenuta 20% (€)": row.ritenuta,
-                            'Rimborso Spese (€)': row.rimborsoSpese,
-                            'Netto da Corrispondere (€)': row.nettoDaCorrisp,
-                            'Totale Movimento Bancario (€)': row.totaleMovimenti,
-                            'Numero Movimenti': row.numeroMovimenti,
-                            'Dettaglio Movimenti': row.dettaglioMovimenti
-                        };
-                        allRows.push(exportRow);
-                        return exportRow;
-                    });
-
-                    const worksheet = XLSX.utils.json_to_sheet(sheetRows);
-                    XLSX.utils.book_append_sheet(workbook, worksheet, section.sheetName || 'Dati');
+                    progress = ((index + 1) / results.length) * 100;
+                    updateProgressBar(progress);
                 });
 
-                const todayStr = new Date().toISOString().split('T')[0];
-                const xlsxFileName = `Dati_Fiscali_${todayStr}.xlsx`;
-                XLSX.writeFile(workbook, xlsxFileName);
-
-                let csvLinkHtml = '';
-                if (allRows.length > 0) {
-                    const csvWorksheet = XLSX.utils.json_to_sheet(allRows);
-                    const csvContent = XLSX.utils.sheet_to_csv(csvWorksheet);
-                    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const csvUrl = URL.createObjectURL(csvBlob);
-                    const csvFileName = `Dati_Fiscali_${todayStr}.csv`;
-                    csvLinkHtml = `<br><a href="${csvUrl}" download="${csvFileName}" style="color: #2196F3; font-weight: bold;">Scarica anche in formato CSV</a>`;
-                    setTimeout(() => URL.revokeObjectURL(csvUrl), 60000);
-                }
-
-                if (statusContainer) {
-                    statusContainer.innerHTML = `
-                        <div class="success-box">
-                            ✓ Esportazione completata con successo!<br>
-                            Il file ${xlsxFileName} è stato scaricato.${csvLinkHtml}
+                // Genera e mostra link per download
+                zip.generateAsync({type:"blob"}).then(function(content) {
+                    const url = URL.createObjectURL(content);
+                    const currentDate = new Date().toISOString().split('T')[0];
+                    
+                    // Mostra link di download
+                    const downloadArea = document.getElementById('downloadArea');
+                    downloadArea.innerHTML = `
+                        <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
+                            <h4 style="color: #155724; margin-bottom: 10px;">✓ ZIP generato con successo!</h4>
+                            <a href="${url}" download="Ricevute_${currentDate}.zip" 
+                               style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                               📥 Clicca qui per scaricare il file ZIP
+                            </a>
                         </div>
                     `;
-                }
+                    
+                    btn.innerHTML = '📥 Crea ZIP con PDF';
+                    btn.disabled = false;
+                    document.getElementById('progressBar').style.display = 'none';
+                    
+                    // Scroll al link
+                    downloadArea.scrollIntoView({ behavior: 'smooth' });
+                });
+
             } catch (error) {
-                console.error('Errore durante l\'esportazione Excel:', error);
-                if (statusContainer) {
-                    statusContainer.innerHTML = `
-                        <div class="error-box">
-                            ✗ Errore durante l'esportazione: ${error.message}
-                        </div>
-                    `;
-                } else {
-                    alert('Si è verificato un errore durante l\'esportazione: ' + error.message);
-                }
-            } finally {
-                if (exportButton) {
-                    exportButton.disabled = matchedData.length === 0;
-                    exportButton.textContent = '📊 Esporta Excel';
-                }
+                console.error('Errore nella generazione:', error);
+                alert('Errore nella generazione del ZIP: ' + error.message);
+                btn.innerHTML = '📥 Crea ZIP con PDF';
+                btn.disabled = false;
+                document.getElementById('progressBar').style.display = 'none';
             }
         }
-
-        async function createZipLink() {
-            const { jsPDF } = window.jspdf;
-            const receipts = document.querySelectorAll('.ricevuta');
-
-            if (receipts.length === 0) {
-                alert('Nessuna ricevuta da scaricare');
+        
+        function exportToExcel() {
+            if (results.length === 0) {
+                alert('Prima devi eseguire il matching e generare le ricevute!');
                 return;
             }
+
+            const excelData = [];
             
-            // Mostra progress bar
-            const progressBar = document.getElementById('progressBar');
-            const progressFill = document.getElementById('progressFill');
-            const downloadBtn = document.getElementById('downloadBtn');
-            
-            progressBar.style.display = 'block';
-            downloadBtn.disabled = true;
-            downloadBtn.textContent = '⏳ Generazione ZIP in corso...';
-            
-            try {
-                // Crea un nuovo ZIP
-                const zip = new JSZip();
-                const pdfFolder = zip.folder("Ricevute");
+            // Intestazione
+            excelData.push([
+                'Id Paese',
+                'Partita Iva', 
+                'Codice Fiscale',
+                'Denominazione (nome + cognome)',
+                'Cognome',
+                'Nome',
+                'Indirizzo',
+                'Num. civico',
+                'CAP',
+                'Comune',
+                'Provincia',
+                'Causale (sempre 135)',
+                'Sezionale (sempre 4)',
+                'Tipo Doc. (sempre TF01)',
+                'Data Doc. (data del pagamento)',
+                'Numero Doc. (progressivo)',
+                'Data doc. fattura origine (data del pagamento)',
+                'Num. doc. fattura origine (sempre 1)',
+                'Descr. Articolo1 (sempre "COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE")',
+                'Imponibile1 (totale escluso ritenuta e rimborso)',
+                'Aliquota IVA1 (sempre 0)',
+                'Natura IVA1 (sempre N2)',
+                'Codice IVA1 (sempre NI)',
+                'Imposta1 (SEMPRE 0)',
+                'Totale Imponibile (uguale a imponibile1)',
+                'Totale Imposta (sempre 0)',
+                'Totale Documento (come Imponibile1)',
+                'Esigibilita\' IVA (sempre I)'
+            ]);
+
+            // Dati
+            results.forEach(person => {
+                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                const receiptNumber = getCurrentReceiptNumber(cfKey);
+                const dataDoc = new Date().toLocaleDateString('it-IT');
+                const denominazione = `${person.nome} ${person.cognome}`;
                 
-                for (let i = 0; i < receipts.length; i++) {
-                    // Aggiorna progress
-                    const progress = ((i + 1) / receipts.length) * 100;
-                    progressFill.style.width = progress + '%';
-                    
-                    // Crea nuovo PDF per ogni ricevuta
-                    const pdf = new jsPDF('p', 'mm', 'a4');
-                    const pdfWidth = pdf.internal.pageSize.getWidth();
-                    
-                    // Renderizza ricevuta come immagine
-                    const canvas = await html2canvas(receipts[i], {
-                        scale: 2,
-                        backgroundColor: '#ffffff',
-                        logging: false
-                    });
-                    
-                    const imgData = canvas.toDataURL('image/png');
-                    
-                    // Calcola dimensioni per mantenere proporzioni
-                    const imgWidth = pdfWidth - 20; // margini di 10mm per lato
-                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                    
-                    // Aggiungi immagine centrata
-                    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
-                    
-                    // Estrai info per il nome file
-                    const person = matchedData[i];
-                    const nome = findColumnValue(person.iscrizione, ['NOME', 'Nome']) || '';
-                    const cognome = findColumnValue(person.iscrizione, ['COGNOME', 'Cognome']) || '';
-                    const cf = findColumnValue(person.iscrizione, ['CODICE FISCALE', 'CF', 'CODICEFISCALE']) || '';
-                    const cfKey = cf || `${nome}_${cognome}`;
-                    const numeroRicevuta = getCurrentReceiptNumber(cfKey);
-                    
-                    // Nome file: Ricevuta_N_Cognome_Nome_CF.pdf
-                    const fileName = `Ricevuta_${numeroRicevuta}_${cognome}_${nome}_${cf}.pdf`
-                        .replace(/\s+/g, '_')
-                        .replace(/[^a-zA-Z0-9_\-\.]/g, ''); // Rimuovi caratteri speciali
-                    
-                    // Aggiungi PDF allo ZIP
-                    const pdfBlob = pdf.output('blob');
-                    pdfFolder.file(fileName, pdfBlob);
+                // Separa indirizzo e numero civico
+                const indirizzoCompleto = person.indirizzo || '';
+                const indirizzoParti = indirizzoCompleto.split(' ');
+                let indirizzo = '';
+                let numCivico = '';
+                
+                if (indirizzoParti.length > 0) {
+                    const ultimaParte = indirizzoParti[indirizzoParti.length - 1];
+                    if (/^\d+[a-zA-Z]?$/.test(ultimaParte)) {
+                        numCivico = ultimaParte;
+                        indirizzo = indirizzoParti.slice(0, -1).join(' ');
+                    } else {
+                        indirizzo = indirizzoCompleto;
+                    }
                 }
-                
-                // Genera lo ZIP
-                const content = await zip.generateAsync({ type: 'blob' });
-                
-                // Crea URL per il download
-                const url = URL.createObjectURL(content);
-                const today = new Date().toISOString().split('T')[0];
-                const zipFileName = `Ricevute_${today}.zip`;
-                
-                // Mostra il link di download
-                const linkContainer = document.getElementById('downloadLinkContainer');
-                const downloadLink = document.getElementById('downloadLink');
-                
-                downloadLink.href = url;
-                downloadLink.download = zipFileName;
-                linkContainer.style.display = 'block';
-                
-                // Scroll al link
-                linkContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-            } catch (error) {
-                console.error('Errore nella generazione del ZIP:', error);
-                alert('Si è verificato un errore nella generazione del ZIP. Riprova.');
-            } finally {
-                // Nascondi progress bar e ripristina bottone
-                progressBar.style.display = 'none';
-                progressFill.style.width = '0%';
-                downloadBtn.disabled = false;
-                downloadBtn.textContent = '📥 Crea ZIP con PDF';
-            }
-        }
-        // Funzione per resettare i numeri progressivi
-        function resetProgressiveNumbers() {
-            if (confirm('Sei sicuro di voler resettare tutti i numeri progressivi delle ricevute?')) {
-                numeroRicevutaPerCF = {};
-                localStorage.removeItem('numeroRicevutaPerCF');
-                alert('Numeri progressivi resettati!');
-            }
+
+                excelData.push([
+                    'IT', // Id Paese
+                    '', // Partita Iva
+                    person.codiceFiscale,
+                    denominazione,
+                    person.cognome,
+                    person.nome,
+                    indirizzo,
+                    numCivico,
+                    person.cap || '',
+                    person.citta || '',
+                    person.provincia || '',
+                    '135', // Causale
+                    '4', // Sezionale
+                    'TF01', // Tipo Doc
+                    dataDoc, // Data Doc
+                    receiptNumber, // Numero Doc
+                    dataDoc, // Data doc fattura origine
+                    '1', // Num doc fattura origine
+                    'COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE', // Descr Articolo1
+                    person.compenso.toFixed(2), // Imponibile1 (compenso lordo)
+                    '0', // Aliquota IVA1
+                    'N2', // Natura IVA1
+                    'NI', // Codice IVA1
+                    '0', // Imposta1
+                    person.compenso.toFixed(2), // Totale Imponibile
+                    '0', // Totale Imposta
+                    person.compenso.toFixed(2), // Totale Documento
+                    'I' // Esigibilita IVA
+                ]);
+            });
+
+            // Crea e scarica il file Excel
+            const ws = XLSX.utils.aoa_to_sheet(excelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Export Ricevute");
+            
+            const currentDate = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `Export_Ricevute_${currentDate}.xlsx`);
         }
     </script>
 </body>
