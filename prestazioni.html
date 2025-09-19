@@ -561,23 +561,40 @@
             
             const controparteNorm = normalizeString(controparte);
             
-            return iscrizioni.find(isc => {
-                // Usa la colonna W che contiene NOME + COGNOME
-                const nomeCognome = isc.W;
+            for (let isc of iscrizioni) {
+                // Prova prima con la colonna W (NOME + COGNOME)
+                if (isc.W) {
+                    const nomeCognomeNorm = normalizeString(isc.W);
+                    if (nomeCognomeNorm && (
+                        controparteNorm.includes(nomeCognomeNorm) || 
+                        nomeCognomeNorm.includes(controparteNorm) ||
+                        controparteNorm === nomeCognomeNorm
+                    )) {
+                        return isc;
+                    }
+                }
                 
-                if (!nomeCognome) return false;
-                
-                const nomeCognomeNorm = normalizeString(nomeCognome);
-                
-                // Confronta direttamente controparte con nome+cognome dalla colonna W
-                return controparteNorm.includes(nomeCognomeNorm) || 
-                       nomeCognomeNorm.includes(controparteNorm) ||
-                       controparteNorm === nomeCognomeNorm;
-            });
+                // Se non funziona con W, prova con B e C separate
+                if (isc.B && isc.C) {
+                    const nomeNorm = normalizeString(isc.C);
+                    const cognomeNorm = normalizeString(isc.B);
+                    
+                    if (nomeNorm && cognomeNorm && (
+                        (controparteNorm.includes(nomeNorm) && controparteNorm.includes(cognomeNorm)) ||
+                        controparteNorm === (nomeNorm + cognomeNorm) ||
+                        controparteNorm === (cognomeNorm + nomeNorm)
+                    )) {
+                        return isc;
+                    }
+                }
+            }
+            
+            return null;
         }
         
         function getImportoFromMovimento(movimento) {
-            const importoColumns = ['IMPORTO', 'Importo', 'ACCREDITI', 'Accrediti', 'ADDEBITI', 'Addebiti', 'ADDEBITO', 'Addebito'];
+            // Priorità agli addebiti invece che agli accrediti
+            const importoColumns = ['ADDEBITI', 'Addebiti', 'ADDEBITO', 'Addebito', 'IMPORTO', 'Importo', 'ACCREDITI', 'Accrediti'];
             
             for (let col of importoColumns) {
                 if (movimento[col] !== undefined && movimento[col] !== null) {
