@@ -1,4 +1,4 @@
-// Funzioni per il caricamento dei file
+// Caricamento file iscrizioni
 function loadIscrizioni() {
     const file = document.getElementById('iscrizioniFile').files[0];
     if (!file) {
@@ -14,25 +14,29 @@ function loadIscrizioni() {
             
             // Cerca specificamente il foglio "ISCRIZIONI"
             let targetSheet = null;
-            if (workbook.Sheets['ISCRIZIONI']) {
-                targetSheet = workbook.Sheets['ISCRIZIONI'];
-            } else if (workbook.Sheets['Iscrizioni']) {
-                targetSheet = workbook.Sheets['Iscrizioni'];
-            } else if (workbook.Sheets['iscrizioni']) {
-                targetSheet = workbook.Sheets['iscrizioni'];
-            } else {
-                alert(`Foglio "ISCRIZIONI" non trovato!\nFogli disponibili: ${workbook.SheetNames.join(', ')}\nAssicurati che il foglio si chiami esattamente "ISCRIZIONI"`);
+            const sheetNames = workbook.SheetNames;
+            
+            for (const name of sheetNames) {
+                if (name.toLowerCase().includes('iscrizioni')) {
+                    targetSheet = workbook.Sheets[name];
+                    break;
+                }
+            }
+            
+            if (!targetSheet) {
+                alert(`Foglio "ISCRIZIONI" non trovato!\nFogli disponibili: ${sheetNames.join(', ')}\nAssicurati che il foglio si chiami esattamente "ISCRIZIONI"`);
                 return;
             }
             
-            iscrizioniData = XLSX.utils.sheet_to_json(targetSheet, { header: 1 });
+            const rawData = XLSX.utils.sheet_to_json(targetSheet, { header: 1 });
             
-            // Converti array in oggetti con le chiavi delle colonne
-            const processedData = [];
-            for (let i = 0; i < iscrizioniData.length; i++) {
-                const row = iscrizioniData[i];
-                if (row.length > 0) {
-                    processedData.push({
+            // Converti array in oggetti con le chiavi delle colonne - STRUTTURA CORRETTA
+            iscrizioniData = [];
+            for (let i = 0; i < rawData.length; i++) {
+                const row = rawData[i];
+                if (row.length > 0 && row[1]) { // Verifica che ci sia almeno il CF (colonna B)
+                    iscrizioniData.push({
+                        // Struttura corretta del file ISCRIZIONI
                         B: row[1], // Codice Fiscale
                         C: row[2], // Cognome
                         D: row[3], // Nome
@@ -55,7 +59,6 @@ function loadIscrizioni() {
                     });
                 }
             }
-            iscrizioniData = processedData.filter(row => row.B); // Filtra righe con CF
             
             const resultDiv = document.getElementById('iscrizioniResult');
             resultDiv.innerHTML = `
@@ -81,6 +84,7 @@ function loadIscrizioni() {
     reader.readAsArrayBuffer(file);
 }
 
+// Caricamento file movimenti
 function loadMovimenti() {
     const file = document.getElementById('movimentiFile').files[0];
     if (!file) {
@@ -119,7 +123,7 @@ function loadMovimenti() {
     reader.readAsArrayBuffer(file);
 }
 
-// Funzioni di matching
+// Trova match per controparte
 function findBestMatch(movimento, iscrizioni) {
     const controparteColumns = ['CONTROPARTE', 'Controparte', 'controparte'];
     let controparte = null;
@@ -136,60 +140,23 @@ function findBestMatch(movimento, iscrizioni) {
     const controparteNorm = normalizeString(controparte);
     
     return iscrizioni.find(isc => {
-        const nome = isc.D; // Colonna D = Nome
-        const cognome = isc.C; // Colonna C = Cognome
+        // Usa le colonne corrette: C = Cognome, D = Nome
+        const cognome = isc.C;
+        const nome = isc.D;
         
         if (!nome || !cognome) return false;
         
         const nomeNorm = normalizeString(nome);
         const cognomeNorm = normalizeString(cognome);
         
+        // Verifica se la controparte contiene sia nome che cognome
         return (controparteNorm.includes(nomeNorm) && controparteNorm.includes(cognomeNorm)) ||
                controparteNorm === (nomeNorm + cognomeNorm) ||
                controparteNorm === (cognomeNorm + nomeNorm);
     });
 }
 
-// Funzioni di matching fuzzy
-function calculateSimilarity(str1, str2) {
-    if (!str1 || !str2) return 0;
-    
-    const s1 = normalizeString(str1);
-    const s2 = normalizeString(str2);
-    
-    if (s1 === s2) return 1;
-    
-    // Calcolo della similarità di Levenshtein
-    const matrix = [];
-    const len1 = s1.length;
-    const len2 = s2.length;
-    
-    for (let i = 0; i <= len2; i++) {
-        matrix[i] = [i];
-    }
-    
-    for (let j = 0; j <= len1; j++) {
-        matrix[0][j] = j;
-    }
-    
-    for (let i = 1; i <= len2; i++) {
-        for (let j = 1; j <= len1; j++) {
-            if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
-                matrix[i][j] = matrix[i - 1][j - 1];
-            } else {
-                matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1,
-                    matrix[i][j - 1] + 1,
-                    matrix[i - 1][j] + 1
-                );
-            }
-        }
-    }
-    
-    const maxLen = Math.max(len1, len2);
-    return maxLen === 0 ? 1 : (maxLen - matrix[len2][len1]) / maxLen;
-}
-
+// Trova corrispondenze simili per matching fuzzy
 function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
     const suggestions = [];
     
@@ -202,7 +169,7 @@ function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
         const nomeCompleto = `${nome} ${cognome}`;
         const similarity = calculateSimilarity(controparte, nomeCompleto);
         
-        if (similarity >= threshold && similarity < 1) {
+        if (similarity >= threshold && similarity < 1) { // Escludi match perfetti (già processati)
             suggestions.push({
                 iscrizione: isc,
                 nomeCompleto: nomeCompleto,
@@ -211,15 +178,17 @@ function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
         }
     });
     
-    return suggestions.sort((a, b) => b.similarity - a.similarity).slice(0, 3);
+    // Ordina per similarità decrescente
+    return suggestions.sort((a, b) => b.similarity - a.similarity).slice(0, 3); // Max 3 suggerimenti
 }
 
+// Dialog interattivo per matching fuzzy
 async function showUnmatchedDialog(notMatched) {
     return new Promise((resolve) => {
         let manualMatches = [];
         let currentIndex = 0;
         
-        function showNextUnmatched() {
+        function processNext() {
             if (currentIndex >= notMatched.length) {
                 resolve(manualMatches);
                 return;
@@ -229,73 +198,70 @@ async function showUnmatchedDialog(notMatched) {
             const controparte = findColumnValue(movimento.movimento, ['CONTROPARTE', 'Controparte', 'controparte']);
             const importo = getImportoFromMovimento(movimento.movimento);
             
+            // Trova suggerimenti simili
             const suggestions = findSimilarMatches(controparte, iscrizioniData);
+            
+            if (suggestions.length === 0) {
+                currentIndex++;
+                processNext();
+                return;
+            }
             
             let message = `MOVIMENTO NON MATCHATO #${currentIndex + 1} di ${notMatched.length}\n\n`;
             message += `Controparte: "${controparte}"\n`;
             message += `Importo: € ${importo.toFixed(2)}\n\n`;
+            message += `Possibili corrispondenze simili:\n\n`;
             
-            if (suggestions.length > 0) {
-                message += `Possibili corrispondenze simili:\n\n`;
-                suggestions.forEach((sugg, idx) => {
-                    const similarity = (sugg.similarity * 100).toFixed(1);
-                    message += `${idx + 1}. ${sugg.nomeCompleto} (${similarity}% simile)\n`;
-                    message += `   CF: ${sugg.iscrizione.B}\n\n`;
-                });
-                message += `Scegli un'opzione:\n`;
-                message += `1-${suggestions.length}: Matcha con il numero corrispondente\n`;
-                message += `S: Salta questo movimento\n`;
-                message += `A: Annulla tutto`;
-                
-                const choice = prompt(message);
-                
-                if (choice === null || choice.toUpperCase() === 'A') {
-                    resolve([]);
-                    return;
-                } else if (choice.toUpperCase() === 'S') {
-                    currentIndex++;
-                    showNextUnmatched();
-                    return;
-                } else {
-                    const choiceNum = parseInt(choice);
-                    if (choiceNum >= 1 && choiceNum <= suggestions.length) {
-                        manualMatches.push({
-                            movimento: movimento.movimento,
-                            iscrizione: suggestions[choiceNum - 1].iscrizione,
-                            importoMovimento: importo,
-                            data: getDataFromMovimento(movimento.movimento)
-                        });
-                    }
-                }
+            suggestions.forEach((sugg, idx) => {
+                const similarity = (sugg.similarity * 100).toFixed(1);
+                message += `${idx + 1}. ${sugg.nomeCompleto} (${similarity}% simile)\n`;
+                message += `   CF: ${sugg.iscrizione.B}\n\n`;
+            });
+            
+            message += `Scegli un'opzione:\n`;
+            message += `1-${suggestions.length}: Matcha con il numero corrispondente\n`;
+            message += `S: Salta questo movimento\n`;
+            message += `A: Annulla tutto`;
+            
+            const choice = prompt(message);
+            
+            if (!choice || choice.toUpperCase() === 'A') {
+                resolve([]);
+                return;
+            } else if (choice.toUpperCase() === 'S') {
+                // Salta questo movimento
             } else {
-                message += `Nessuna corrispondenza simile trovata.\n\n`;
-                message += `S: Salta questo movimento\n`;
-                message += `A: Annulla tutto`;
-                
-                const choice = prompt(message);
-                
-                if (choice === null || choice.toUpperCase() === 'A') {
-                    resolve([]);
-                    return;
+                const choiceNum = parseInt(choice);
+                if (choiceNum >= 1 && choiceNum <= suggestions.length) {
+                    manualMatches.push({
+                        movimento: movimento.movimento,
+                        iscrizione: suggestions[choiceNum - 1].iscrizione,
+                        importoMovimento: importo,
+                        data: getDataFromMovimento(movimento.movimento)
+                    });
                 }
             }
             
             currentIndex++;
-            showNextUnmatched();
+            setTimeout(processNext, 100);
         }
         
-        showNextUnmatched();
+        processNext();
     });
 }
 
-// Funzione principale di matching
-async function performMatching() {
+// Matching principale
+function performMatching() {
+    if (iscrizioniData.length === 0 || movimentiData.length === 0) {
+        alert('Carica prima entrambi i file Excel!');
+        return;
+    }
+    
     let matchedMovimenti = [];
     let notMatched = [];
     
     console.log('Inizio matching con', movimentiData.length, 'movimenti e', iscrizioniData.length, 'iscrizioni');
     
-    // Primo giro di matching automatico
     movimentiData.forEach((movimento, index) => {
         const match = findBestMatch(movimento, iscrizioniData);
         const importo = getImportoFromMovimento(movimento);
@@ -313,40 +279,30 @@ async function performMatching() {
         }
     });
     
-    console.log('Match trovati:', matchedMovimenti.length);
-    console.log('Non matchati:', notMatched.length);
+    console.log('Match trovati:', matchedMovimenti.length, 'Non matchati:', notMatched.length);
     
-    // Matching fuzzy per i non matchati
+    // Se ci sono non matchati, offri matching intelligente
     if (notMatched.length > 0) {
-        const proceedWithFuzzy = confirm(
+        const useIntelligent = confirm(
             `Trovati ${notMatched.length} movimenti non matchati.\n\n` +
-            `Vuoi procedere con il matching intelligente per trovare corrispondenze simili?\n\n` +
-            `(Ti verranno mostrati i suggerimenti uno per uno)`
+            `Vuoi attivare il matching intelligente per cercare corrispondenze simili?`
         );
         
-        if (proceedWithFuzzy) {
-            const manualMatches = await showUnmatchedDialog(notMatched);
-            
-            if (manualMatches.length > 0) {
-                matchedMovimenti.push(...manualMatches);
-                
-                manualMatches.forEach(manualMatch => {
-                    const index = notMatched.findIndex(nm => nm.movimento === manualMatch.movimento);
-                    if (index !== -1) {
-                        notMatched.splice(index, 1);
-                    }
-                });
-                
-                alert(`Match aggiuntivi trovati: ${manualMatches.length}\nMovimenti ancora non matchati: ${notMatched.length}`);
-            }
+        if (useIntelligent) {
+            showUnmatchedDialog(notMatched).then(manualMatches => {
+                const finalMatched = [...matchedMovimenti, ...manualMatches];
+                processMatchingResults(finalMatched);
+            });
+        } else {
+            processMatchingResults(matchedMovimenti);
         }
+    } else {
+        processMatchingResults(matchedMovimenti);
     }
-    
-    // Processa i risultati finali
-    processMatchingResults(matchedMovimenti, notMatched);
 }
 
-function processMatchingResults(matchedMovimenti, notMatched) {
+// Processamento risultati del matching
+function processMatchingResults(matchedMovimenti) {
     // Raggruppa per persona E per mese
     const gruppiPerPersonaMese = {};
     
@@ -394,35 +350,21 @@ function processMatchingResults(matchedMovimenti, notMatched) {
             let totaleNetto = gruppo.totaleMovimenti + creditoResiduo;
             
             if (totaleNetto > 0) {
-                // Nuova scala rimborsi spese
-                let rimborsoSpese = 0;
-                if (totaleNetto >= 500) {
-                    rimborsoSpese = totaleNetto * 0.40; // 40% per importi ≥ 500€
-                } else if (totaleNetto >= 450) {
-                    rimborsoSpese = 200;
-                } else if (totaleNetto >= 350) {
-                    rimborsoSpese = 150;
-                } else if (totaleNetto >= 250) {
-                    rimborsoSpese = 100;
-                } else if (totaleNetto >= 150) {
-                    rimborsoSpese = 60;
-                } else if (totaleNetto >= 80) {
-                    rimborsoSpese = 40;
-                }
-                
+                // Calcola rimborso spese con nuova scala
+                const rimborsoSpese = calculateRimborsoSpese(totaleNetto);
                 const compensoNetto = totaleNetto - rimborsoSpese;
                 const compensoLordo = compensoNetto / 0.8;
                 
                 results.push({
-                    nome: gruppo.iscrizione.D,
-                    cognome: gruppo.iscrizione.C,
-                    codiceFiscale: gruppo.iscrizione.B,
-                    partitaIva: gruppo.iscrizione.M,
-                    iban: gruppo.iscrizione.O,
-                    indirizzo: gruppo.iscrizione.H,
-                    cap: gruppo.iscrizione.K,
-                    citta: gruppo.iscrizione.I,
-                    provincia: gruppo.iscrizione.J,
+                    nome: gruppo.iscrizione.D, // Colonna D = Nome
+                    cognome: gruppo.iscrizione.C, // Colonna C = Cognome
+                    codiceFiscale: gruppo.iscrizione.B, // Colonna B = CF
+                    partitaIva: gruppo.iscrizione.M, // Colonna M = P.IVA
+                    iban: gruppo.iscrizione.O, // Colonna O = IBAN
+                    indirizzo: gruppo.iscrizione.H, // Colonna H = Via Indirizzo 1
+                    cap: gruppo.iscrizione.K, // Colonna K = CAP
+                    citta: gruppo.iscrizione.I, // Colonna I = Città
+                    provincia: gruppo.iscrizione.J, // Colonna J = Provincia
                     compenso: compensoLordo,
                     rimborsoSpese: rimborsoSpese,
                     movimentoBancario: totaleNetto,
@@ -438,19 +380,23 @@ function processMatchingResults(matchedMovimenti, notMatched) {
         });
     });
     
-    // Mostra i risultati nell'interfaccia
-    displayMatchingResults(matchedMovimenti, notMatched);
+    // Mostra risultati
+    showMatchingResults(results, matchedMovimenti.length);
+    
+    // Abilita generazione ricevute
+    if (results.length > 0) {
+        document.getElementById('generateBtn').disabled = false;
+    }
 }
 
-function displayMatchingResults(matchedMovimenti, notMatched) {
+// Mostra risultati matching
+function showMatchingResults(results, numMatched) {
     const resultDiv = document.getElementById('matchingResult');
     let html = `
         <div class="info-box">
             <strong>Risultati del matching:</strong><br>
-            ✓ Ricevute da generare: ${results.length} (divise per mese)<br>
-            ✓ Movimenti matchati: ${matchedMovimenti.length}<br>
-            ✗ Non matchati: ${notMatched.length}<br>
-            Totale movimenti: ${movimentiData.length}
+            ✓ Ricevute da generare: ${results.length}<br>
+            ✓ Movimenti matchati: ${numMatched}<br>
         </div>
     `;
     
@@ -484,35 +430,6 @@ function displayMatchingResults(matchedMovimenti, notMatched) {
                     <td>€ ${item.movimentoBancario.toFixed(2)}</td>
                     <td>€ ${item.rimborsoSpese.toFixed(2)}</td>
                     <td><span class="match-status match-found">OK</span></td>
-                </tr>
-            `;
-        });
-        
-        html += '</tbody></table>';
-        document.getElementById('generateBtn').disabled = false;
-    }
-    
-    if (notMatched.length > 0) {
-        html += `
-            <h4>Movimenti ancora non matchati:</h4>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Controparte</th>
-                        <th>Importo</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        
-        notMatched.forEach(item => {
-            const controparte = item.movimento.CONTROPARTE || item.movimento.Controparte || 'N/D';
-            const importo = getImportoFromMovimento(item.movimento);
-            
-            html += `
-                <tr>
-                    <td>${controparte}</td>
-                    <td>€ ${importo.toFixed(2)}</td>
                 </tr>
             `;
         });
