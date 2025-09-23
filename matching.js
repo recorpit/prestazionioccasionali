@@ -195,6 +195,17 @@ function calculateSimilarity(str1, str2) {
     return maxLen === 0 ? 1 : (maxLen - matrix[len2][len1]) / maxLen;
 }
 
+// Calcolo rimborsi spese - NUOVA SCALA (duplicata qui per evitare dipendenze)
+function calculateRimborsoSpese(importo) {
+    if (importo >= 500) return importo * 0.40; // 40% per importi ≥ 500€
+    if (importo >= 450) return 200;
+    if (importo >= 350) return 150;
+    if (importo >= 250) return 100;
+    if (importo >= 150) return 60;
+    if (importo >= 80) return 40;
+    return 0;
+}
+
 // Trova corrispondenze simili per matching fuzzy
 function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
     const suggestions = [];
