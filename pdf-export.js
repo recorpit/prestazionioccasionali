@@ -162,7 +162,7 @@ async function createZipWithPDFsByMonth() {
     // Se c'è solo un mese, procede direttamente
     if (mesiDisponibili.length === 1) {
         const meseSelezionato = mesiDisponibili[0];
-        await exportPDFForMonth(meseSelezionato, ricevutePerMese[meseSelezionato]);
+        exportPDFForMonth(meseSelezionato, ricevutePerMese[meseSelezionato]);
         return;
     }
 
