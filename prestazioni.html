@@ -674,13 +674,144 @@
             reader.readAsArrayBuffer(file);
         }
         
-        function normalizeString(str) {
-            if (!str) return '';
-            return str.toString()
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9]/g, '');
+        function calculateSimilarity(str1, str2) {
+            if (!str1 || !str2) return 0;
+            
+            // Normalizza le stringhe
+            const s1 = normalizeString(str1);
+            const s2 = normalizeString(str2);
+            
+            if (s1 === s2) return 1;
+            
+            // Calcolo della similarità di Levenshtein
+            const matrix = [];
+            const len1 = s1.length;
+            const len2 = s2.length;
+            
+            for (let i = 0; i <= len2; i++) {
+                matrix[i] = [i];
+            }
+            
+            for (let j = 0; j <= len1; j++) {
+                matrix[0][j] = j;
+            }
+            
+            for (let i = 1; i <= len2; i++) {
+                for (let j = 1; j <= len1; j++) {
+                    if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1,
+                            matrix[i][j - 1] + 1,
+                            matrix[i - 1][j] + 1
+                        );
+                    }
+                }
+            }
+            
+            const maxLen = Math.max(len1, len2);
+            return maxLen === 0 ? 1 : (maxLen - matrix[len2][len1]) / maxLen;
+        }
+        
+        function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
+            const suggestions = [];
+            
+            iscrizioni.forEach(isc => {
+                const nome = isc.D;
+                const cognome = isc.C;
+                
+                if (!nome || !cognome) return;
+                
+                const nomeCompleto = `${nome} ${cognome}`;
+                const similarity = calculateSimilarity(controparte, nomeCompleto);
+                
+                if (similarity >= threshold && similarity < 1) { // Escludi match perfetti (già processati)
+                    suggestions.push({
+                        iscrizione: isc,
+                        nomeCompleto: nomeCompleto,
+                        similarity: similarity
+                    });
+                }
+            });
+            
+            // Ordina per similarità decrescente
+            return suggestions.sort((a, b) => b.similarity - a.similarity).slice(0, 3); // Max 3 suggerimenti
+        }
+        
+        async function showUnmatchedDialog(notMatched) {
+            return new Promise((resolve) => {
+                let manualMatches = [];
+                let currentIndex = 0;
+                
+                function showNextUnmatched() {
+                    if (currentIndex >= notMatched.length) {
+                        resolve(manualMatches);
+                        return;
+                    }
+                    
+                    const movimento = notMatched[currentIndex];
+                    const controparte = findColumnValue(movimento.movimento, ['CONTROPARTE', 'Controparte', 'controparte']);
+                    const importo = getImportoFromMovimento(movimento.movimento);
+                    
+                    // Trova suggerimenti simili
+                    const suggestions = findSimilarMatches(controparte, iscrizioniData);
+                    
+                    let message = `MOVIMENTO NON MATCHATO #${currentIndex + 1} di ${notMatched.length}\n\n`;
+                    message += `Controparte: "${controparte}"\n`;
+                    message += `Importo: € ${importo.toFixed(2)}\n\n`;
+                    
+                    if (suggestions.length > 0) {
+                        message += `Possibili corrispondenze simili:\n\n`;
+                        suggestions.forEach((sugg, idx) => {
+                            const similarity = (sugg.similarity * 100).toFixed(1);
+                            message += `${idx + 1}. ${sugg.nomeCompleto} (${similarity}% simile)\n`;
+                            message += `   CF: ${sugg.iscrizione.B}\n\n`;
+                        });
+                        message += `Scegli un'opzione:\n`;
+                        message += `1-${suggestions.length}: Matcha con il numero corrispondente\n`;
+                        message += `S: Salta questo movimento\n`;
+                        message += `A: Annulla tutto`;
+                        
+                        const choice = prompt(message);
+                        
+                        if (choice === null || choice.toUpperCase() === 'A') {
+                            resolve([]);
+                            return;
+                        } else if (choice.toUpperCase() === 'S') {
+                            currentIndex++;
+                            showNextUnmatched();
+                            return;
+                        } else {
+                            const choiceNum = parseInt(choice);
+                            if (choiceNum >= 1 && choiceNum <= suggestions.length) {
+                                manualMatches.push({
+                                    movimento: movimento.movimento,
+                                    iscrizione: suggestions[choiceNum - 1].iscrizione,
+                                    importoMovimento: importo,
+                                    data: getDataFromMovimento(movimento.movimento)
+                                });
+                            }
+                        }
+                    } else {
+                        message += `Nessuna corrispondenza simile trovata.\n\n`;
+                        message += `S: Salta questo movimento\n`;
+                        message += `A: Annulla tutto`;
+                        
+                        const choice = prompt(message);
+                        
+                        if (choice === null || choice.toUpperCase() === 'A') {
+                            resolve([]);
+                            return;
+                        }
+                    }
+                    
+                    currentIndex++;
+                    showNextUnmatched();
+                }
+                
+                showNextUnmatched();
+            });
         }
         
         function findBestMatch(movimento, iscrizioni) {
@@ -835,13 +966,19 @@
                     let totaleNetto = gruppo.totaleMovimenti + creditoResiduo;
                     
                     if (totaleNetto > 0) {
-                        // Calcola rimborso spese
+                        // Calcola rimborso spese con nuova scala
                         let rimborsoSpese = 0;
                         if (totaleNetto >= 500) {
+                            rimborsoSpese = totaleNetto * 0.40; // 40% per importi ≥ 500€
+                        } else if (totaleNetto >= 450) {
                             rimborsoSpese = 200;
-                        } else if (totaleNetto >= 300) {
+                        } else if (totaleNetto >= 350) {
+                            rimborsoSpese = 150;
+                        } else if (totaleNetto >= 250) {
                             rimborsoSpese = 100;
-                        } else if (totaleNetto >= 100) {
+                        } else if (totaleNetto >= 150) {
+                            rimborsoSpese = 60;
+                        } else if (totaleNetto >= 80) {
                             rimborsoSpese = 40;
                         }
                         
@@ -1271,6 +1408,20 @@
                 return;
             }
 
+            // Calcola totali rimborsi e risparmio fiscale
+            const totaleRimborsi = results.reduce((sum, person) => sum + person.rimborsoSpese, 0);
+            const risparmioFiscale = totaleRimborsi * 0.20;
+            
+            // Mostra popup informativo
+            const conferma = confirm(
+                `RIEPILOGO RIMBORSI SPESE\n\n` +
+                `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
+                `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+                `Procedere con la generazione del ZIP PDF?`
+            );
+            
+            if (!conferma) return;
+
             const btn = document.getElementById('downloadBtn');
             btn.innerHTML = '⏳ Generazione ZIP in corso...';
             btn.disabled = true;
@@ -1345,6 +1496,20 @@
                 alert('Prima devi eseguire il matching e generare le ricevute!');
                 return;
             }
+
+            // Calcola totali rimborsi e risparmio fiscale
+            const totaleRimborsi = results.reduce((sum, person) => sum + person.rimborsoSpese, 0);
+            const risparmioFiscale = totaleRimborsi * 0.20;
+            
+            // Mostra popup informativo
+            const conferma = confirm(
+                `RIEPILOGO RIMBORSI SPESE\n\n` +
+                `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
+                `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+                `Procedere con l'export Excel per mese?`
+            );
+            
+            if (!conferma) return;
 
             // Raggruppa le ricevute per mese
             const ricevutePerMese = {};
@@ -1471,6 +1636,20 @@
                 alert('Prima devi eseguire il matching e generare le ricevute!');
                 return;
             }
+
+            // Calcola totali rimborsi e risparmio fiscale
+            const totaleRimborsi = results.reduce((sum, person) => sum + person.rimborsoSpese, 0);
+            const risparmioFiscale = totaleRimborsi * 0.20;
+            
+            // Mostra popup informativo
+            const conferma = confirm(
+                `RIEPILOGO RIMBORSI SPESE\n\n` +
+                `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
+                `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+                `Procedere con l'export Excel?`
+            );
+            
+            if (!conferma) return;
 
             const excelData = [];
             
