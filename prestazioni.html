@@ -674,6 +674,15 @@
             reader.readAsArrayBuffer(file);
         }
         
+        function normalizeString(str) {
+            if (!str) return '';
+            return str.toString()
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]/g, '');
+        }
+        
         function calculateSimilarity(str1, str2) {
             if (!str1 || !str2) return 0;
             
