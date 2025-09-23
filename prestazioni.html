@@ -725,10 +725,12 @@
                         const compensoNetto = totaleNetto - rimborsoSpese;
                         const compensoLordo = compensoNetto / 0.8;
                         
-                results.push({
+                                        results.push({
                             nome: gruppo.iscrizione.D, // Colonna D = Nome
                             cognome: gruppo.iscrizione.C, // Colonna C = Cognome
                             codiceFiscale: gruppo.iscrizione.B, // Colonna B = CF
+                            partitaIva: gruppo.iscrizione.M, // Colonna M = P.IVA
+                            iban: gruppo.iscrizione.O, // Colonna O = IBAN
                             indirizzo: gruppo.iscrizione.H, // Colonna H = Via Indirizzo 1
                             cap: gruppo.iscrizione.K, // Colonna K = CAP
                             citta: gruppo.iscrizione.I, // Colonna I = Città
@@ -1188,10 +1190,66 @@
             }
         }
         
+        function getIbanFromMovimento(movimento) {
+            const ibanColumns = ['CONTO', 'Conto', 'conto', 'IBAN', 'Iban', 'iban'];
+            
+            for (let col of ibanColumns) {
+                if (movimento[col]) {
+                    return movimento[col];
+                }
+            }
+            return null;
+        }
+        
+        function checkIbanDiscrepancies(results) {
+            let discrepancies = [];
+            
+            results.forEach(person => {
+                // Controlla tutti i movimenti di questa persona
+                person.movimenti.forEach(movimento => {
+                    const ibanMovimento = getIbanFromMovimento(movimento);
+                    const ibanIscrizione = person.iban;
+                    
+                    // Normalizza gli IBAN per confronto (rimuovi spazi e converti in maiuscolo)
+                    const ibanMovNorm = ibanMovimento ? ibanMovimento.replace(/\s/g, '').toUpperCase() : '';
+                    const ibanIscNorm = ibanIscrizione ? ibanIscrizione.replace(/\s/g, '').toUpperCase() : '';
+                    
+                    if (ibanMovNorm && ibanIscNorm && ibanMovNorm !== ibanIscNorm) {
+                        discrepancies.push({
+                            nome: person.nome,
+                            cognome: person.cognome,
+                            cf: person.codiceFiscale,
+                            ibanMovimento: ibanMovimento,
+                            ibanIscrizione: ibanIscrizione
+                        });
+                    }
+                });
+            });
+            
+            return discrepancies;
+        }
+        
         function exportToExcelByMonth() {
             if (results.length === 0) {
                 alert('Prima devi eseguire il matching e generare le ricevute!');
                 return;
+            }
+
+            // Controlla discrepanze IBAN
+            const discrepancies = checkIbanDiscrepancies(results);
+            
+            if (discrepancies.length > 0) {
+                let message = 'ATTENZIONE: Trovate discrepanze tra IBAN!\n\n';
+                discrepancies.forEach(disc => {
+                    message += `${disc.nome} ${disc.cognome} (CF: ${disc.cf})\n`;
+                    message += `- IBAN Movimento: ${disc.ibanMovimento}\n`;
+                    message += `- IBAN Iscrizione: ${disc.ibanIscrizione}\n\n`;
+                });
+                message += 'Vuoi procedere comunque con l\'export?';
+                
+                if (!confirm(message)) {
+                    return; // Interrompe l'export se l'operatore dice NO
+                }
             }
 
             // Raggruppa le ricevute per mese
@@ -1271,7 +1329,7 @@
 
                     excelData.push([
                         'IT',
-                        '',
+                        person.partitaIva || '', // Usa la P.IVA dalla colonna M delle iscrizioni
                         person.codiceFiscale,
                         denominazione,
                         person.cognome,
@@ -1318,6 +1376,23 @@
             if (results.length === 0) {
                 alert('Prima devi eseguire il matching e generare le ricevute!');
                 return;
+            }
+
+            // Controlla discrepanze IBAN
+            const discrepancies = checkIbanDiscrepancies(results);
+            
+            if (discrepancies.length > 0) {
+                let message = 'ATTENZIONE: Trovate discrepanze tra IBAN!\n\n';
+                discrepancies.forEach(disc => {
+                    message += `${disc.nome} ${disc.cognome} (CF: ${disc.cf})\n`;
+                    message += `- IBAN Movimento: ${disc.ibanMovimento}\n`;
+                    message += `- IBAN Iscrizione: ${disc.ibanIscrizione}\n\n`;
+                });
+                message += 'Vuoi procedere comunque con l\'export?';
+                
+                if (!confirm(message)) {
+                    return; // Interrompe l'export se l'operatore dice NO
+                }
             }
 
             const excelData = [];
@@ -1379,7 +1454,7 @@
 
                 excelData.push([
                     'IT',
-                    '',
+                    person.partitaIva || '', // Usa la P.IVA dalla colonna M delle iscrizioni
                     person.codiceFiscale,
                     denominazione,
                     person.cognome,
