@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generatore Ricevute per Prestazioni Artistiche</title>
     
-    <!-- CSS Styles -->
-    <link rel="stylesheet" href="styles.css">
-    
-    <!-- External Libraries -->
+    <!-- Librerie External -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container no-print">
@@ -23,9 +23,9 @@
         <div class="step" id="step1">
             <h2>Step 1: Carica File Iscrizioni</h2>
             <div class="info-box">
-                <strong>Formato richiesto:</strong> File Excel (.xlsx) con struttura:<br>
+                <strong>Formato richiesto:</strong> File Excel (.xlsx) con foglio "ISCRIZIONI"<br>
                 Colonna B: Codice Fiscale | Colonna C: Cognome | Colonna D: Nome<br>
-                Colonna H: Indirizzo | Colonna I: Città | Colonna J: Provincia | Colonna K: CAP
+                Colonna H: Indirizzo | Colonna I: Città | Colonna J: Provincia | Colonna K: CAP | Colonna M: P.IVA
             </div>
             <input type="file" id="iscrizioniFile" accept=".xlsx,.xls">
             <button onclick="loadIscrizioni()">Carica Iscrizioni</button>
@@ -36,8 +36,8 @@
         <div class="step inactive" id="step2">
             <h2>Step 2: Carica Movimenti Bancari</h2>
             <div class="info-box">
-                <strong>Nota importante:</strong> Gli importi nei movimenti bancari sono considerati come <strong>TOTALI</strong> (inclusi eventuali rimborsi spese).<br>
-                Il sistema calcolerà automaticamente rimborsi spese e ritenute.
+                <strong>Colonne richieste:</strong> "controparte" per il nome, "ADDEBITI" per gli importi<br>
+                <strong>Nuova scala rimborsi:</strong> ≥80€→40€, ≥150€→60€, ≥250€→100€, ≥350€→150€, ≥450€→200€, ≥500€→40% dell'importo
             </div>
             <input type="file" id="movimentiFile" accept=".xlsx,.xls" disabled>
             <button onclick="loadMovimenti()" disabled id="loadMovimentiBtn">Carica Movimenti</button>
@@ -51,28 +51,23 @@
             <button onclick="generateReceipts()" disabled id="generateBtn">Genera Ricevute</button>
             
             <div style="margin-top: 10px;">
-                <button onclick="createZipWithPDFs()" id="downloadBtn" 
-                        style="background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
-                    Crea ZIP con PDF
-                </button>
-                
-                <button onclick="generatePDFPreviews()" id="pdfPreviewBtn"
-                        style="background: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                <button onclick="generatePDFPreviews()" id="pdfPreviewBtn" class="btn-purple" disabled>
                     Anteprima PDF
                 </button>
                 
-                <button onclick="exportToExcel()" 
-                        style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                <button onclick="createZipWithPDFs()" id="downloadBtn" class="btn-success" disabled>
+                    Crea ZIP con PDF
+                </button>
+                
+                <button onclick="exportToExcel()" id="exportBtn" class="btn-info" disabled>
                     Esporta Excel
                 </button>
                 
-                <button onclick="exportToExcelByMonth()" 
-                        style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                <button onclick="exportToExcelByMonth()" id="exportByMonthBtn" class="btn-info" disabled>
                     Esporta Excel per Mese
                 </button>
                 
-                <button onclick="resetAllCounters()" 
-                        style="background: #fd7e14; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                <button onclick="resetAllCounters()" class="btn-warning">
                     Reset Numerazione
                 </button>
             </div>
@@ -109,41 +104,19 @@
     
     <div id="receiptsContainer"></div>
     
-    <!-- Load JavaScript Modules -->
+    <!-- Scripts -->
     <script src="utils.js"></script>
     <script src="matching.js"></script>
     <script src="receipts.js"></script>
-    <script src="excel-export.js"></script>
     <script src="pdf-export.js"></script>
+    <script src="excel-export.js"></script>
     
-    <!-- Initialize App -->
     <script>
-        // Verifica che tutte le librerie siano caricate
-        window.addEventListener('load', function() {
-            console.log('App caricata. Verifico librerie...');
-            
-            // Verifica librerie
-            const libraries = {
-                'XLSX': typeof XLSX !== 'undefined',
-                'jsPDF': typeof window.jspdf !== 'undefined',
-                'html2canvas': typeof html2canvas !== 'undefined', 
-                'JSZip': typeof JSZip !== 'undefined'
-            };
-            
-            let allLoaded = true;
-            Object.entries(libraries).forEach(([name, loaded]) => {
-                if (loaded) {
-                    console.log(`✓ ${name} caricato correttamente`);
-                } else {
-                    console.error(`✗ ${name} NON caricato!`);
-                    allLoaded = false;
-                }
-            });
-            
-            if (allLoaded) {
-                console.log('✓ Tutte le librerie caricate. App pronta.');
-            } else {
-                alert('Errore: Alcune librerie non si sono caricate. Ricarica la pagina.');
+        // Inizializzazione
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Sistema caricato, verifico librerie...');
+            if (checkLibrariesLoaded()) {
+                console.log('Tutte le librerie sono state caricate correttamente');
             }
         });
     </script>
