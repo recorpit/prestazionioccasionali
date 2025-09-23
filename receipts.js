@@ -119,6 +119,7 @@ function generateReceipts() {
     
     // Abilita download e anteprima PDF
     document.getElementById('downloadBtn').disabled = false;
+    document.getElementById('downloadByMonthBtn').disabled = false;
     document.getElementById('pdfPreviewBtn').disabled = false;
     document.getElementById('exportBtn').disabled = false;
     document.getElementById('exportByMonthBtn').disabled = false;
