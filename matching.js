@@ -160,7 +160,7 @@ function loadMovimenti() {
     reader.readAsArrayBuffer(file);
 }
 
-// Trova match per controparte
+// Trova match per controparte con filtri per escludere buste paga/stipendi
 function findBestMatch(movimento, iscrizioni) {
     const controparteColumns = ['CONTROPARTE', 'Controparte', 'controparte'];
     let controparte = null;
@@ -173,6 +173,25 @@ function findBestMatch(movimento, iscrizioni) {
     }
     
     if (!controparte) return null;
+    
+    // Filtri per escludere buste paga, stipendi e similari
+    const descrizioneCompleta = (controparte + ' ' + (movimento.Descrizione || movimento.DESCRIZIONE || '')).toLowerCase();
+    const terminiEsclusi = [
+        'stipendio', 'stipendi', 'busta paga', 'bustapaga', 'salario', 'retribuzione',
+        'cedolino', 'paga', 'salary', 'payroll', 'wage', 'wages',
+        'tfr', 'liquidazione', 'indennita', 'indennità', 'contributi',
+        'previdenza', 'pensione', 'inps', 'inail', 'irpef',
+        'trattenute', 'ritenute', 'detrazioni', 'assegni familiari',
+        'straordinari', 'ferie', 'permessi', 'malattia',
+        'mensilita', 'mensilità', 'tredicesima', 'quattordicesima'
+    ];
+    
+    for (let termine of terminiEsclusi) {
+        if (descrizioneCompleta.includes(termine)) {
+            console.log(`Movimento escluso (contiene "${termine}"):`, controparte);
+            return null;
+        }
+    }
     
     const controparteNorm = normalizeString(controparte);
     
@@ -491,6 +510,11 @@ function processMatchingResults(matchedMovimenti) {
         
         // Mostra riepilogo finale delle ricevute da generare
         showFinalSummary();
+        
+        console.log('Pulsante Genera Ricevute abilitato per', results.length, 'ricevute');
+    } else {
+        console.log('Nessuna ricevuta da generare, pulsante rimane disabilitato');
+        alert('Nessuna ricevuta da generare. Verifica che ci siano movimenti validi da persone nelle iscrizioni.');
     }
 }
 
@@ -826,8 +850,15 @@ function toggleEsclusioni() {
     
     if (conferma) {
         // Processa solo i movimenti inclusi
+        console.log('Processing movimenti inclusi:', movimentiInclusi.length);
         processMatchingResults(movimentiInclusi);
         alert(`Esclusioni applicate! ${movimentiInclusi.length} movimenti verranno processati.`);
+        
+        // Forza l'abilitazione del pulsante se ci sono risultati
+        if (results.length > 0) {
+            document.getElementById('generateBtn').disabled = false;
+            console.log('Pulsante Generate Ricevute forzatamente abilitato');
+        }
     }
 }
 
