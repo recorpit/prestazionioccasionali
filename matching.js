@@ -1,3 +1,40 @@
+// Estrazione importo accrediti da movimento
+function getAccreditiFromMovimento(movimento) {
+    const accreditiColumns = ['ACCREDITI', 'Accrediti', 'ACCREDITO', 'Accredito'];
+    
+    for (let col of accreditiColumns) {
+        if (movimento[col] !== undefined && movimento[col] !== null) {
+            let value = movimento[col];
+            if (typeof value === 'string') {
+                value = value.replace(/[^\d,-]/g, '').replace(',', '.');
+            }
+            return Math.abs(parseFloat(value)) || 0;
+        }
+    }
+    return 0;
+}
+
+// Mostra avviso per accrediti da persone nelle iscrizioni
+function showAccreditiWarning(accreditiFromIscritti) {
+    let message = '⚠️ ATTENZIONE - POSSIBILI RIMBORSI RILEVATI!\n\n';
+    message += 'Trovati bonifici IN ENTRATA da persone presenti nelle iscrizioni:\n\n';
+    
+    accreditiFromIscritti.forEach((accredito, index) => {
+        const controparte = findColumnValue(accredito.movimento, ['CONTROPARTE', 'Controparte', 'controparte']) || 'N/D';
+        const data = accredito.data.toLocaleDateString('it-IT');
+        message += `${index + 1}. ${accredito.iscrizione.D} ${accredito.iscrizione.C}\n`;
+        message += `   Controparte: ${controparte}\n`;
+        message += `   Importo ricevuto: € ${accredito.importoMovimento.toFixed(2)}\n`;
+        message += `   Data: ${data}\n\n`;
+    });
+    
+    message += 'Questi potrebbero essere rimborsi di bonifici errati.\n';
+    message += 'VERIFICA che non siano stati generati pagamenti duplicati per queste persone!\n\n';
+    message += 'Controlla manualmente se ci sono addebiti corrispondenti da escludere.';
+    
+    alert(message);
+}
+
 // Caricamento file iscrizioni
 function loadIscrizioni() {
     const file = document.getElementById('iscrizioniFile').files[0];
@@ -346,17 +383,22 @@ function performMatching() {
                     !manualMatches.some(match => match.movimento === item.movimento)
                 );
                 
-                // Mostra i risultati aggiornati
-                showMatchingResults(finalMatched, finalUnmatched);
-                
                 // Processa i risultati per creare le ricevute
                 processMatchingResults(finalMatched);
+                
+                // Mostra i risultati aggiornati DOPO aver processato
+                showMatchingResults(finalMatched, finalUnmatched);
             });
         } else {
+            // Processa solo i matchati ma mostra anche i non matchati
             processMatchingResults(matchedMovimenti);
+            // Mostra tutti i risultati inclusi i non matchati
+            showMatchingResults(matchedMovimenti, notMatched);
         }
     } else {
         processMatchingResults(matchedMovimenti);
+        // Anche qui mostra i risultati (in questo caso nessun non matchato)
+        showMatchingResults(matchedMovimenti, []);
     }
 }
 
@@ -500,28 +542,44 @@ function showFinalSummary() {
     resultDiv.innerHTML += summaryHtml;
 }
 
-// Mostra risultati matching
-function showMatchingResults(matched, unmatched) {
+// Variabili globali per gestione esclusioni
+let movimentiEsclusi = [];
+let allMatchedMovimenti = []; // Conserva tutti i match per il controllo manuale
+
+// Mostra risultati matching con controlli manuali
+function showMatchingResults(matched, unmatched, accrediti = []) {
+    // Salva tutti i match per il controllo manuale
+    allMatchedMovimenti = [...matched];
+    
     const resultDiv = document.getElementById('matchingResult');
     let html = `
         <div class="info-box">
             <strong>Risultati del matching:</strong><br>
             ✓ Movimenti matchati: ${matched.length}<br>
             ${unmatched.length > 0 ? `✗ Movimenti non matchati: ${unmatched.length}<br>` : ''}
+            ${accrediti.length > 0 ? `⚠️ Accrediti da iscritti rilevati: ${accrediti.length}<br>` : ''}
+            ${movimentiEsclusi.length > 0 ? `🚫 Movimenti esclusi manualmente: ${movimentiEsclusi.length}<br>` : ''}
         </div>
     `;
     
     if (matched.length > 0) {
         html += `
-            <h4>Movimenti Matchati:</h4>
-            <table>
+            <h4>Movimenti Matchati (Controllo Manuale):</h4>
+            <div style="margin-bottom: 15px;">
+                <button onclick="selectAllMovimenti(true)" style="background: #28a745; margin-right: 10px;">Seleziona Tutti</button>
+                <button onclick="selectAllMovimenti(false)" style="background: #dc3545; margin-right: 10px;">Deseleziona Tutti</button>
+                <button onclick="toggleEsclusioni()" style="background: #fd7e14;">Applica Esclusioni</button>
+            </div>
+            <table id="movimentiTable">
                 <thead>
                     <tr>
+                        <th style="width: 30px;">✓</th>
                         <th>Nome</th>
                         <th>Cognome</th>
                         <th>CF</th>
                         <th>Controparte</th>
                         <th>Importo</th>
+                        <th>Data</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -530,49 +588,276 @@ function showMatchingResults(matched, unmatched) {
         
         matched.forEach((match, index) => {
             const controparte = findColumnValue(match.movimento, ['CONTROPARTE', 'Controparte', 'controparte']) || 'N/D';
+            const data = match.data.toLocaleDateString('it-IT');
+            const movimentoId = `movimento_${index}`;
+            const isEscluso = movimentiEsclusi.some(escl => escl.index === index);
+            
             html += `
-                <tr>
+                <tr id="row_${index}" style="${isEscluso ? 'background-color: #ffebee; opacity: 0.7;' : ''}">
+                    <td style="text-align: center;">
+                        <input type="checkbox" id="${movimentoId}" ${!isEscluso ? 'checked' : ''} 
+                               onchange="toggleMovimento(${index}, this.checked)" 
+                               style="transform: scale(1.2);">
+                    </td>
                     <td>${match.iscrizione.D || ''}</td>
                     <td>${match.iscrizione.C || ''}</td>
                     <td>${match.iscrizione.B || ''}</td>
                     <td>${controparte}</td>
                     <td>€ ${match.importoMovimento.toFixed(2)}</td>
-                    <td><span class="match-status match-found">MATCHATO</span></td>
+                    <td>${data}</td>
+                    <td>
+                        <span class="match-status ${isEscluso ? 'match-not-found' : 'match-found'}">
+                            ${isEscluso ? 'ESCLUSO' : 'INCLUSO'}
+                        </span>
+                    </td>
                 </tr>
             `;
         });
         
         html += '</tbody></table>';
+        
+        // Riepilogo movimenti selezionati
+        const movimentiInclusi = matched.filter((_, index) => !movimentiEsclusi.some(escl => escl.index === index));
+        const totaleInclusi = movimentiInclusi.reduce((sum, match) => sum + match.importoMovimento, 0);
+        const totaleEsclusi = movimentiEsclusi.reduce((sum, escl) => sum + escl.importo, 0);
+        
+        html += `
+            <div style="background: #e8f5e9; border: 1px solid #4CAF50; border-radius: 5px; padding: 15px; margin: 15px 0;">
+                <h5 style="margin-top: 0; color: #155724;">Riepilogo Selezione:</h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <strong>Movimenti da processare:</strong> ${movimentiInclusi.length}<br>
+                        <strong>Importo totale:</strong> € ${totaleInclusi.toFixed(2)}
+                    </div>
+                    <div>
+                        <strong>Movimenti esclusi:</strong> ${movimentiEsclusi.length}<br>
+                        <strong>Importo escluso:</strong> € ${totaleEsclusi.toFixed(2)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (accrediti.length > 0) {
+        html += `
+            <h4 style="color: #ff9800;">⚠️ Accrediti da Persone nelle Iscrizioni (${accrediti.length}):</h4>
+            <div style="background: #fff3cd; border: 1px solid #ff9800; border-radius: 5px; padding: 15px; margin: 10px 0;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; color: #856404;">
+                    ATTENZIONE: Trovati bonifici IN ENTRATA da persone che sono anche nelle iscrizioni!
+                </p>
+                <p style="margin: 0 0 15px 0; font-style: italic; color: #856404;">
+                    Potrebbero essere rimborsi di bonifici errati. Verifica se esistono addebiti corrispondenti da escludere.
+                </p>
+                
+                <button onclick="autoEscludiDuplicati(${JSON.stringify(accrediti).replace(/"/g, '&quot;')})" 
+                        style="background: #ff9800; margin-bottom: 15px;">
+                    Escludi Automaticamente Duplicati Sospetti
+                </button>
+                
+                <table>
+                    <thead>
+                        <tr style="background-color: #ff9800;">
+                            <th style="color: white;">Nome</th>
+                            <th style="color: white;">Cognome</th>
+                            <th style="color: white;">Controparte</th>
+                            <th style="color: white;">Importo Ricevuto</th>
+                            <th style="color: white;">Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        accrediti.forEach((accredito, index) => {
+            const controparte = findColumnValue(accredito.movimento, ['CONTROPARTE', 'Controparte', 'controparte']) || 'N/D';
+            const data = accredito.data.toLocaleDateString('it-IT');
+            html += `
+                <tr style="background-color: #fff3cd;">
+                    <td><strong>${accredito.iscrizione.D || ''}</strong></td>
+                    <td><strong>${accredito.iscrizione.C || ''}</strong></td>
+                    <td>${controparte}</td>
+                    <td><strong style="color: #ff9800;">€ ${accredito.importoMovimento.toFixed(2)}</strong></td>
+                    <td>${data}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
     }
     
     if (unmatched.length > 0) {
         html += `
-            <h4 style="color: #dc3545;">Movimenti Non Matchati:</h4>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Controparte</th>
-                        <th>Importo</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <h4 style="color: #dc3545;">⚠️ Movimenti Non Matchati (${unmatched.length}):</h4>
+            <div style="background: #f8d7da; border: 1px solid #dc3545; border-radius: 5px; padding: 15px; margin: 10px 0;">
+                <table>
+                    <thead>
+                        <tr style="background-color: #dc3545;">
+                            <th style="color: white;">Controparte</th>
+                            <th style="color: white;">Importo</th>
+                            <th style="color: white;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         `;
         
         unmatched.forEach((movimento, index) => {
             const controparte = findColumnValue(movimento.movimento, ['CONTROPARTE', 'Controparte', 'controparte']) || 'N/D';
             const importo = getImportoFromMovimento(movimento.movimento);
+            
             html += `
                 <tr style="background-color: #f8d7da;">
-                    <td>${controparte}</td>
-                    <td>€ ${importo.toFixed(2)}</td>
-                    <td><span class="match-status match-not-found">NON MATCHATO</span></td>
+                    <td><strong>${controparte}</strong></td>
+                    <td><strong>€ ${importo.toFixed(2)}</strong></td>
+                    <td><span class="match-status match-not-found">NON PROCESSATO</span></td>
                 </tr>
             `;
         });
         
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
     }
     
     resultDiv.innerHTML = html;
+}
+
+// Funzioni per il controllo manuale
+function selectAllMovimenti(select) {
+    allMatchedMovimenti.forEach((_, index) => {
+        const checkbox = document.getElementById(`movimento_${index}`);
+        if (checkbox) {
+            checkbox.checked = select;
+            toggleMovimento(index, select);
+        }
+    });
+}
+
+function toggleMovimento(index, includi) {
+    const movimento = allMatchedMovimenti[index];
+    if (!movimento) return;
+    
+    if (includi) {
+        // Rimuovi dalle esclusioni se presente
+        movimentiEsclusi = movimentiEsclusi.filter(escl => escl.index !== index);
+    } else {
+        // Aggiungi alle esclusioni se non presente
+        if (!movimentiEsclusi.some(escl => escl.index === index)) {
+            movimentiEsclusi.push({
+                index: index,
+                movimento: movimento,
+                importo: movimento.importoMovimento,
+                motivo: 'Esclusione manuale'
+            });
+        }
+    }
+    
+    // Aggiorna visivamente la riga
+    const row = document.getElementById(`row_${index}`);
+    if (row) {
+        if (includi) {
+            row.style.backgroundColor = '';
+            row.style.opacity = '1';
+            const statusCell = row.querySelector('.match-status');
+            statusCell.textContent = 'INCLUSO';
+            statusCell.className = 'match-status match-found';
+        } else {
+            row.style.backgroundColor = '#ffebee';
+            row.style.opacity = '0.7';
+            const statusCell = row.querySelector('.match-status');
+            statusCell.textContent = 'ESCLUSO';
+            statusCell.className = 'match-status match-not-found';
+        }
+    }
+    
+    // Aggiorna il riepilogo
+    updateRiepilogoSelezione();
+}
+
+function updateRiepilogoSelezione() {
+    const movimentiInclusi = allMatchedMovimenti.filter((_, index) => 
+        !movimentiEsclusi.some(escl => escl.index === index)
+    );
+    const totaleInclusi = movimentiInclusi.reduce((sum, match) => sum + match.importoMovimento, 0);
+    const totaleEsclusi = movimentiEsclusi.reduce((sum, escl) => sum + escl.importo, 0);
+    
+    // Aggiorna il riepilogo nella pagina se esiste
+    const riepilogoDiv = document.querySelector('[style*="background: #e8f5e9"]');
+    if (riepilogoDiv) {
+        const content = riepilogoDiv.querySelector('div[style*="grid-template-columns"]');
+        if (content) {
+            content.innerHTML = `
+                <div>
+                    <strong>Movimenti da processare:</strong> ${movimentiInclusi.length}<br>
+                    <strong>Importo totale:</strong> € ${totaleInclusi.toFixed(2)}
+                </div>
+                <div>
+                    <strong>Movimenti esclusi:</strong> ${movimentiEsclusi.length}<br>
+                    <strong>Importo escluso:</strong> € ${totaleEsclusi.toFixed(2)}
+                </div>
+            `;
+        }
+    }
+}
+
+function toggleEsclusioni() {
+    if (movimentiEsclusi.length === 0) {
+        alert('Nessun movimento da escludere selezionato.');
+        return;
+    }
+    
+    const movimentiInclusi = allMatchedMovimenti.filter((_, index) => 
+        !movimentiEsclusi.some(escl => escl.index === index)
+    );
+    
+    const conferma = confirm(
+        `Confermi le esclusioni?\n\n` +
+        `Movimenti da processare: ${movimentiInclusi.length}\n` +
+        `Movimenti esclusi: ${movimentiEsclusi.length}\n\n` +
+        `Solo i movimenti selezionati genereranno ricevute.`
+    );
+    
+    if (conferma) {
+        // Processa solo i movimenti inclusi
+        processMatchingResults(movimentiInclusi);
+        alert(`Esclusioni applicate! ${movimentiInclusi.length} movimenti verranno processati.`);
+    }
+}
+
+function autoEscludiDuplicati(accrediti) {
+    let esclusiAutomatici = 0;
+    
+    accrediti.forEach(accredito => {
+        // Cerca addebiti con stesso CF e importo simile
+        allMatchedMovimenti.forEach((match, index) => {
+            if (match.iscrizione.B === accredito.iscrizione.B) {
+                const differenzaImporto = Math.abs(match.importoMovimento - accredito.importoMovimento);
+                const tolleranza = accredito.importoMovimento * 0.1; // 10% di tolleranza
+                
+                if (differenzaImporto <= tolleranza) {
+                    // Esclude automaticamente questo movimento
+                    if (!movimentiEsclusi.some(escl => escl.index === index)) {
+                        movimentiEsclusi.push({
+                            index: index,
+                            movimento: match,
+                            importo: match.importoMovimento,
+                            motivo: 'Duplicato automatico - trovato accredito corrispondente'
+                        });
+                        
+                        const checkbox = document.getElementById(`movimento_${index}`);
+                        if (checkbox) checkbox.checked = false;
+                        toggleMovimento(index, false);
+                        esclusiAutomatici++;
+                    }
+                }
+            }
+        });
+    });
+    
+    if (esclusiAutomatici > 0) {
+        alert(`Esclusi automaticamente ${esclusiAutomatici} movimenti duplicati.`);
+        updateRiepilogoSelezione();
+    } else {
+        alert('Nessun duplicato automatico rilevato.');
+    }
 }
