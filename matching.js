@@ -243,8 +243,8 @@ function calculateRimborsoSpese(importo) {
     return 0;
 }
 
-// Trova corrispondenze simili per matching fuzzy
-function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
+// Trova corrispondenze simili per matching fuzzy - MOLTO PIÙ SELETTIVO
+function findSimilarMatches(controparte, iscrizioni, threshold = 0.90) { // Soglia molto alta: 90%
     const suggestions = [];
     
     iscrizioni.forEach(isc => {
@@ -256,7 +256,8 @@ function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
         const nomeCompleto = `${nome} ${cognome}`;
         const similarity = calculateSimilarity(controparte, nomeCompleto);
         
-        if (similarity >= threshold && similarity < 1) { // Escludi match perfetti (già processati)
+        // Solo match molto simili (90%+ di similarità)
+        if (similarity >= threshold && similarity < 1) {
             suggestions.push({
                 iscrizione: isc,
                 nomeCompleto: nomeCompleto,
@@ -265,8 +266,8 @@ function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
         }
     });
     
-    // Ordina per similarità decrescente
-    return suggestions.sort((a, b) => b.similarity - a.similarity).slice(0, 3); // Max 3 suggerimenti
+    // Ordina per similarità decrescente e prende solo il migliore
+    return suggestions.sort((a, b) => b.similarity - a.similarity).slice(0, 1); // Solo 1 suggerimento
 }
 
 // Dialog interattivo per matching fuzzy
@@ -587,8 +588,14 @@ function showMatchingResults(matched, unmatched, accrediti = []) {
         `;
         
         matched.forEach((match, index) => {
+            // Verifica che movimento e iscrizione siano validi
+            if (!match || !match.movimento || !match.iscrizione) {
+                console.warn('Match non valido saltato:', match);
+                return;
+            }
+            
             const controparte = findColumnValue(match.movimento, ['CONTROPARTE', 'Controparte', 'controparte']) || 'N/D';
-            const data = match.data.toLocaleDateString('it-IT');
+            const data = match.data ? match.data.toLocaleDateString('it-IT') : 'N/D';
             const movimentoId = `movimento_${index}`;
             const isEscluso = movimentiEsclusi.some(escl => escl.index === index);
             
@@ -861,3 +868,12 @@ function autoEscludiDuplicati(accrediti) {
         alert('Nessun duplicato automatico rilevato.');
     }
 }
+
+// Esposizione funzioni al contesto globale
+window.loadIscrizioni = loadIscrizioni;
+window.loadMovimenti = loadMovimenti;
+window.performMatching = performMatching;
+window.selectAllMovimenti = selectAllMovimenti;
+window.toggleMovimento = toggleMovimento;
+window.toggleEsclusioni = toggleEsclusioni;
+window.autoEscludiDuplicati = autoEscludiDuplicati;
