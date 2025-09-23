@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generatore Ricevute per Prestazioni Artistiche</title>
+    
+    <!-- CSS Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <div class="container no-print">
+        <h1>Generatore Ricevute per Prestazioni Artistiche</h1>
+        <p>Sistema automatizzato per generare ricevute incrociando dati anagrafici e movimenti bancari</p>
+        
+        <!-- Step 1: Carica file iscrizioni -->
+        <div class="step" id="step1">
+            <h2>Step 1: Carica File Iscrizioni</h2>
+            <div class="info-box">
+                <strong>Formato richiesto:</strong> File Excel (.xlsx) con struttura:<br>
+                Colonna B: Codice Fiscale | Colonna C: Cognome | Colonna D: Nome<br>
+                Colonna H: Indirizzo | Colonna I: Città | Colonna J: Provincia | Colonna K: CAP
+            </div>
+            <input type="file" id="iscrizioniFile" accept=".xlsx,.xls">
+            <button onclick="loadIscrizioni()">Carica Iscrizioni</button>
+            <div id="iscrizioniResult"></div>
+        </div>
+        
+        <!-- Step 2: Carica movimenti bancari -->
+        <div class="step inactive" id="step2">
+            <h2>Step 2: Carica Movimenti Bancari</h2>
+            <div class="info-box">
+                <strong>Nota importante:</strong> Gli importi nei movimenti bancari sono considerati come <strong>TOTALI</strong> (inclusi eventuali rimborsi spese).<br>
+                Il sistema calcolerà automaticamente rimborsi spese e ritenute.
+            </div>
+            <input type="file" id="movimentiFile" accept=".xlsx,.xls" disabled>
+            <button onclick="loadMovimenti()" disabled id="loadMovimentiBtn">Carica Movimenti</button>
+            <div id="movimentiResult"></div>
+        </div>
+        
+        <!-- Step 3: Matching e generazione -->
+        <div class="step inactive" id="step3">
+            <h2>Step 3: Matching e Generazione Ricevute</h2>
+            <button onclick="performMatching()" disabled id="matchBtn">Esegui Matching</button>
+            <button onclick="generateReceipts()" disabled id="generateBtn">Genera Ricevute</button>
+            
+            <div style="margin-top: 10px;">
+                <button onclick="createZipWithPDFs()" id="downloadBtn" 
+                        style="background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                    Crea ZIP con PDF
+                </button>
+                
+                <button onclick="generatePDFPreviews()" id="pdfPreviewBtn"
+                        style="background: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                    Anteprima PDF
+                </button>
+                
+                <button onclick="exportToExcel()" 
+                        style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                    Esporta Excel
+                </button>
+                
+                <button onclick="exportToExcelByMonth()" 
+                        style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                    Esporta Excel per Mese
+                </button>
+                
+                <button onclick="resetAllCounters()" 
+                        style="background: #fd7e14; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                    Reset Numerazione
+                </button>
+            </div>
+            
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <div id="downloadArea"></div>
+            
+            <div class="tabs" style="margin-top: 20px;">
+                <button class="tab active" onclick="showTab('matching')">Risultati Matching</button>
+                <button class="tab" onclick="showTab('preview')">Anteprima Ricevute</button>
+                <button class="tab" onclick="showTab('pdfpreview')">Anteprima PDF</button>
+            </div>
+            
+            <div id="matchingTab" class="tab-content active">
+                <div id="matchingResult"></div>
+            </div>
+            
+            <div id="previewTab" class="tab-content">
+                <div id="previewArea"></div>
+            </div>
+            
+            <div id="pdfpreviewTab" class="tab-content">
+                <div id="pdfPreviewArea">
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        Genera prima le ricevute, poi clicca su "Anteprima PDF" per vedere come appariranno i PDF.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="receiptsContainer"></div>
+    
+    <!-- Load JavaScript Modules -->
+    <script src="utils.js"></script>
+    <script src="matching.js"></script>
+    <script src="receipts.js"></script>
+    <script src="excel-export.js"></script>
+    <script src="pdf-export.js"></script>
+    
+    <!-- Initialize App -->
+    <script>
+        // Verifica che tutte le librerie siano caricate
+        window.addEventListener('load', function() {
+            console.log('App caricata. Verifico librerie...');
+            
+            // Verifica librerie
+            const libraries = {
+                'XLSX': typeof XLSX !== 'undefined',
+                'jsPDF': typeof window.jspdf !== 'undefined',
+                'html2canvas': typeof html2canvas !== 'undefined', 
+                'JSZip': typeof JSZip !== 'undefined'
+            };
+            
+            let allLoaded = true;
+            Object.entries(libraries).forEach(([name, loaded]) => {
+                if (loaded) {
+                    console.log(`✓ ${name} caricato correttamente`);
+                } else {
+                    console.error(`✗ ${name} NON caricato!`);
+                    allLoaded = false;
+                }
+            });
+            
+            if (allLoaded) {
+                console.log('✓ Tutte le librerie caricate. App pronta.');
+            } else {
+                alert('Errore: Alcune librerie non si sono caricate. Ricarica la pagina.');
+            }
+        });
+    </script>
+</body>
+</html>
