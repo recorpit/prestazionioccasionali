@@ -329,7 +329,8 @@ function performMatching() {
         }
     });
     
-    console.log('Match trovati:', matchedMovimenti.length, 'Non matchati:', notMatched.length);
+    // Mostra risultati
+    showMatchingResults(matchedMovimenti, notMatched);
     
     // Se ci sono non matchati, offri matching intelligente
     if (notMatched.length > 0) {
@@ -341,6 +342,14 @@ function performMatching() {
         if (useIntelligent) {
             showUnmatchedDialog(notMatched).then(manualMatches => {
                 const finalMatched = [...matchedMovimenti, ...manualMatches];
+                const finalUnmatched = notMatched.filter(item => 
+                    !manualMatches.some(match => match.movimento === item.movimento)
+                );
+                
+                // Mostra i risultati aggiornati
+                showMatchingResults(finalMatched, finalUnmatched);
+                
+                // Processa i risultati per creare le ricevute
                 processMatchingResults(finalMatched);
             });
         } else {
@@ -436,50 +445,128 @@ function processMatchingResults(matchedMovimenti) {
     // Abilita generazione ricevute
     if (results.length > 0) {
         document.getElementById('generateBtn').disabled = false;
+        
+        // Mostra riepilogo finale delle ricevute da generare
+        showFinalSummary();
     }
 }
 
+// Mostra riepilogo finale delle ricevute da generare
+function showFinalSummary() {
+    const resultDiv = document.getElementById('matchingResult');
+    let summaryHtml = `
+        <div style="margin-top: 30px; padding: 20px; background: #e8f5e9; border: 1px solid #4CAF50; border-radius: 5px;">
+            <h4 style="color: #155724; margin-top: 0;">✅ RICEVUTE PRONTE PER LA GENERAZIONE</h4>
+            <p><strong>${results.length}</strong> ricevute verranno generate (divise per mese):</p>
+            
+            <table style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Cognome</th>
+                        <th>CF</th>
+                        <th>Periodo</th>
+                        <th>Movimenti</th>
+                        <th>Totale</th>
+                        <th>Rimborso</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    results.forEach(item => {
+        summaryHtml += `
+            <tr>
+                <td>${item.nome || ''}</td>
+                <td>${item.cognome || ''}</td>
+                <td>${item.codiceFiscale || ''}</td>
+                <td>${item.mese}/${item.anno}</td>
+                <td>${item.movimenti.length}</td>
+                <td>€ ${item.movimentoBancario.toFixed(2)}</td>
+                <td>€ ${item.rimborsoSpese.toFixed(2)}</td>
+            </tr>
+        `;
+    });
+    
+    summaryHtml += `
+                </tbody>
+            </table>
+            <p style="margin: 15px 0 0 0; font-weight: bold; color: #155724;">
+                Ora puoi cliccare su "Genera Ricevute" per creare i documenti!
+            </p>
+        </div>
+    `;
+    
+    resultDiv.innerHTML += summaryHtml;
+}
+
 // Mostra risultati matching
-function showMatchingResults(results, numMatched) {
+function showMatchingResults(matched, unmatched) {
     const resultDiv = document.getElementById('matchingResult');
     let html = `
         <div class="info-box">
             <strong>Risultati del matching:</strong><br>
-            ✓ Ricevute da generare: ${results.length}<br>
-            ✓ Movimenti matchati: ${numMatched}<br>
+            ✓ Movimenti matchati: ${matched.length}<br>
+            ${unmatched.length > 0 ? `✗ Movimenti non matchati: ${unmatched.length}<br>` : ''}
         </div>
     `;
     
-    if (results.length > 0) {
+    if (matched.length > 0) {
         html += `
-            <h4>Ricevute da generare (divise per mese):</h4>
+            <h4>Movimenti Matchati:</h4>
             <table>
                 <thead>
                     <tr>
                         <th>Nome</th>
                         <th>Cognome</th>
                         <th>CF</th>
-                        <th>Mese/Anno</th>
-                        <th>N° Mov.</th>
-                        <th>Totale</th>
-                        <th>Rimborso</th>
+                        <th>Controparte</th>
+                        <th>Importo</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
         
-        results.forEach(item => {
+        matched.forEach((match, index) => {
+            const controparte = findColumnValue(match.movimento, ['CONTROPARTE', 'Controparte', 'controparte']) || 'N/D';
             html += `
                 <tr>
-                    <td>${item.nome || ''}</td>
-                    <td>${item.cognome || ''}</td>
-                    <td>${item.codiceFiscale || ''}</td>
-                    <td>${item.mese}/${item.anno}</td>
-                    <td>${item.movimenti.length}</td>
-                    <td>€ ${item.movimentoBancario.toFixed(2)}</td>
-                    <td>€ ${item.rimborsoSpese.toFixed(2)}</td>
-                    <td><span class="match-status match-found">OK</span></td>
+                    <td>${match.iscrizione.D || ''}</td>
+                    <td>${match.iscrizione.C || ''}</td>
+                    <td>${match.iscrizione.B || ''}</td>
+                    <td>${controparte}</td>
+                    <td>€ ${match.importoMovimento.toFixed(2)}</td>
+                    <td><span class="match-status match-found">MATCHATO</span></td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+    }
+    
+    if (unmatched.length > 0) {
+        html += `
+            <h4 style="color: #dc3545;">Movimenti Non Matchati:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Controparte</th>
+                        <th>Importo</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        unmatched.forEach((movimento, index) => {
+            const controparte = findColumnValue(movimento.movimento, ['CONTROPARTE', 'Controparte', 'controparte']) || 'N/D';
+            const importo = getImportoFromMovimento(movimento.movimento);
+            html += `
+                <tr style="background-color: #f8d7da;">
+                    <td>${controparte}</td>
+                    <td>€ ${importo.toFixed(2)}</td>
+                    <td><span class="match-status match-not-found">NON MATCHATO</span></td>
                 </tr>
             `;
         });
