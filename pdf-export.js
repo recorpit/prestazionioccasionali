@@ -375,6 +375,152 @@ async function exportAllMonthsPDF(ricevutePerMese) {
     
     alert(`Completato! Generati ${Object.keys(ricevutePerMese).length} file ZIP.`);
 }
+
+// Funzione originale createZipWithPDFs mantenuta per compatibilità
+async function createZipWithPDFs() {
+    if (results.length === 0) {
+        alert('Prima devi eseguire il matching e generare le ricevute!');
+        return;
+    }
+
+    if (!checkPDFLibraries()) return;
+
+    // Calcola totali rimborsi e risparmio fiscale
+    const totaleRimborsi = results.reduce((sum, person) => sum + person.rimborsoSpese, 0);
+    const risparmioFiscale = totaleRimborsi * 0.20;
+    
+    const conferma = confirm(
+        `RIEPILOGO RIMBORSI SPESE\n\n` +
+        `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
+        `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+        `Procedere con la generazione del ZIP PDF?`
+    );
+    
+    if (!conferma) return;
+
+    const btn = document.getElementById('downloadBtn');
+    btn.innerHTML = '⏳ Generazione ZIP in corso...';
+    btn.disabled = true;
+    document.getElementById('progressBar').style.display = 'block';
+
+    try {
+        console.log('Inizio generazione ZIP PDF...');
+        
+        const zip = new JSZip();
+        const folder = zip.folder("Ricevute");
+        const receiptsElements = document.querySelectorAll('.ricevuta');
+
+        console.log(`Trovate ${receiptsElements.length} ricevute da convertire`);
+
+        for (let index = 0; index < results.length && index < receiptsElements.length; index++) {
+            const person = results[index];
+            const receiptElement = receiptsElements[index];
+            
+            console.log(`Processando ricevuta ${index + 1}/${results.length}: ${person.nome} ${person.cognome}`);
+            
+            try {
+                const canvas = await html2canvas(receiptElement, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: receiptElement.scrollWidth,
+                    height: receiptElement.scrollHeight,
+                    windowWidth: 1200,
+                    windowHeight: 1600
+                });
+                
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                const imgData = canvas.toDataURL('image/png', 0.95);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                
+                let imgWidth = pdfWidth - 20;
+                let imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                if (imgHeight > pdfHeight - 20) {
+                    imgHeight = pdfHeight - 20;
+                    imgWidth = (canvas.width * imgHeight) / canvas.height;
+                }
+                
+                const x = (pdfWidth - imgWidth) / 2;
+                const y = 10;
+                
+                pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+                
+                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                const receiptNumber = getCurrentReceiptNumber(cfKey);
+                const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`
+                    .replace(/\s+/g, '_')
+                    .replace(/[^a-zA-Z0-9_\-\.]/g, '');
+                
+                const pdfBlob = pdf.output('blob');
+                folder.file(fileName, pdfBlob);
+                
+                const progress = ((index + 1) / results.length) * 90;
+                updateProgressBar(progress);
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+            } catch (pdfError) {
+                console.error(`Errore nella generazione PDF ${index}:`, pdfError);
+            }
+        }
+        
+        console.log('Generazione ZIP finale...');
+        updateProgressBar(95);
+        
+        const content = await zip.generateAsync({
+            type: "blob",
+            compression: "DEFLATE",
+            compressionOptions: { level: 6 }
+        });
+        
+        updateProgressBar(100);
+        
+        const url = URL.createObjectURL(content);
+        const currentDate = new Date().toISOString().split('T')[0];
+        
+        const downloadArea = document.getElementById('downloadArea');
+        downloadArea.innerHTML = `
+            <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
+                <h4 style="color: #155724; margin-bottom: 10px;">✓ ZIP generato con successo!</h4>
+                <p>Contiene ${results.length} ricevute PDF</p>
+                <a href="${url}" download="Ricevute_${currentDate}.zip" 
+                   style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
+                   📥 Clicca qui per scaricare il file ZIP
+                </a>
+            </div>
+        `;
+        
+        console.log('ZIP PDF generato con successo!');
+        downloadArea.scrollIntoView({ behavior: 'smooth' });
+
+    } catch (error) {
+        console.error('Errore nella generazione ZIP:', error);
+        
+        const downloadArea = document.getElementById('downloadArea');
+        downloadArea.innerHTML = `
+            <div class="error-box">
+                <h4>Errore nella generazione PDF</h4>
+                <p>Dettagli: ${error.message}</p>
+                <p>Prova a ricaricare la pagina e ripetere l'operazione.</p>
+            </div>
+        `;
+    } finally {
+        btn.innerHTML = 'Crea ZIP con PDF (Tutti)';
+        btn.disabled = false;
+        document.getElementById('progressBar').style.display = 'none';
+        updateProgressBar(0);
+    }
+}
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
         return;
