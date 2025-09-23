@@ -133,8 +133,248 @@ async function generatePDFPreviews() {
     }
 }
 
-// Creazione ZIP con PDF
-async function createZipWithPDFs() {
+// Creazione ZIP con PDF divisi per mese
+async function createZipWithPDFsByMonth() {
+    if (results.length === 0) {
+        alert('Prima devi eseguire il matching e generare le ricevute!');
+        return;
+    }
+
+    if (!checkPDFLibraries()) return;
+
+    // Raggruppa ricevute per mese
+    const ricevutePerMese = {};
+    results.forEach((person, index) => {
+        const meseAnno = `${person.anno}-${person.mese.toString().padStart(2, '0')}`;
+        if (!ricevutePerMese[meseAnno]) {
+            ricevutePerMese[meseAnno] = [];
+        }
+        ricevutePerMese[meseAnno].push({ person, index });
+    });
+
+    const mesiDisponibili = Object.keys(ricevutePerMese).sort();
+    
+    if (mesiDisponibili.length === 0) {
+        alert('Nessuna ricevuta disponibile per l\'export');
+        return;
+    }
+
+    // Se c'è solo un mese, procede direttamente
+    if (mesiDisponibili.length === 1) {
+        const meseSelezionato = mesiDisponibili[0];
+        await exportPDFForMonth(meseSelezionato, ricevutePerMese[meseSelezionato]);
+        return;
+    }
+
+    // Crea dialog per selezione mese
+    const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+    
+    let opzioniMesi = 'Seleziona il mese da esportare:\n\n';
+    mesiDisponibili.forEach((meseAnno, index) => {
+        const [anno, mese] = meseAnno.split('-');
+        const nomeCompleto = `${mesiNomi[parseInt(mese)]} ${anno}`;
+        const numRicevute = ricevutePerMese[meseAnno].length;
+        opzioniMesi += `${index + 1}. ${nomeCompleto} (${numRicevute} ricevute)\n`;
+    });
+    
+    opzioniMesi += '\n0. Esporta TUTTI i mesi\n';
+    opzioniMesi += 'Inserisci il numero della tua scelta:';
+
+    const scelta = prompt(opzioniMesi);
+    
+    if (!scelta || scelta === null) return;
+    
+    const sceltaNum = parseInt(scelta);
+    
+    if (sceltaNum === 0) {
+        // Esporta tutti i mesi
+        await exportAllMonthsPDF(ricevutePerMese);
+    } else if (sceltaNum >= 1 && sceltaNum <= mesiDisponibili.length) {
+        const meseSelezionato = mesiDisponibili[sceltaNum - 1];
+        await exportPDFForMonth(meseSelezionato, ricevutePerMese[meseSelezionato]);
+    } else {
+        alert('Selezione non valida');
+    }
+}
+
+// Esporta PDF per un mese specifico
+async function exportPDFForMonth(meseAnno, ricevuteMese) {
+    const [anno, mese] = meseAnno.split('-');
+    const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+    const nomeCompleto = `${mesiNomi[parseInt(mese)]} ${anno}`;
+
+    // Calcola totali rimborsi per questo mese
+    const totaleRimborsi = ricevuteMese.reduce((sum, item) => sum + item.person.rimborsoSpese, 0);
+    const risparmioFiscale = totaleRimborsi * 0.20;
+    
+    const conferma = confirm(
+        `EXPORT PDF - ${nomeCompleto.toUpperCase()}\n\n` +
+        `Ricevute da esportare: ${ricevuteMese.length}\n` +
+        `Rimborsi spese del mese: € ${totaleRimborsi.toFixed(2)}\n` +
+        `Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+        `Procedere con l'export PDF?`
+    );
+    
+    if (!conferma) return;
+
+    const btn = document.getElementById('downloadByMonthBtn');
+    btn.innerHTML = '⏳ Generazione ZIP in corso...';
+    btn.disabled = true;
+    document.getElementById('progressBar').style.display = 'block';
+
+    try {
+        console.log(`Inizio generazione ZIP PDF per ${nomeCompleto}...`);
+        
+        const zip = new JSZip();
+        const folder = zip.folder(`Ricevute_${nomeCompleto.replace(' ', '_')}`);
+        const receiptsElements = document.querySelectorAll('.ricevuta');
+
+        for (let i = 0; i < ricevuteMese.length; i++) {
+            const { person, index } = ricevuteMese[i];
+            const receiptElement = receiptsElements[index];
+            
+            console.log(`Processando ricevuta ${i + 1}/${ricevuteMese.length}: ${person.nome} ${person.cognome}`);
+            
+            try {
+                const canvas = await html2canvas(receiptElement, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: receiptElement.scrollWidth,
+                    height: receiptElement.scrollHeight,
+                    windowWidth: 1200,
+                    windowHeight: 1600
+                });
+                
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                const imgData = canvas.toDataURL('image/png', 0.95);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                
+                let imgWidth = pdfWidth - 20;
+                let imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                if (imgHeight > pdfHeight - 20) {
+                    imgHeight = pdfHeight - 20;
+                    imgWidth = (canvas.width * imgHeight) / canvas.height;
+                }
+                
+                const x = (pdfWidth - imgWidth) / 2;
+                const y = 10;
+                
+                pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+                
+                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                const receiptNumber = getCurrentReceiptNumber(cfKey);
+                const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`
+                    .replace(/\s+/g, '_')
+                    .replace(/[^a-zA-Z0-9_\-\.]/g, '');
+                
+                const pdfBlob = pdf.output('blob');
+                folder.file(fileName, pdfBlob);
+                
+                const progress = ((i + 1) / ricevuteMese.length) * 90;
+                updateProgressBar(progress);
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+            } catch (pdfError) {
+                console.error(`Errore nella generazione PDF ${i}:`, pdfError);
+            }
+        }
+        
+        console.log('Generazione ZIP finale...');
+        updateProgressBar(95);
+        
+        const content = await zip.generateAsync({
+            type: "blob",
+            compression: "DEFLATE",
+            compressionOptions: { level: 6 }
+        });
+        
+        updateProgressBar(100);
+        
+        const url = URL.createObjectURL(content);
+        const fileName = `Ricevute_${nomeCompleto.replace(' ', '_')}.zip`;
+        
+        const downloadArea = document.getElementById('downloadArea');
+        downloadArea.innerHTML = `
+            <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
+                <h4 style="color: #155724; margin-bottom: 10px;">✓ ZIP generato con successo!</h4>
+                <p><strong>${nomeCompleto}</strong> - ${ricevuteMese.length} ricevute PDF</p>
+                <a href="${url}" download="${fileName}" 
+                   style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
+                   📥 Scarica ${fileName}
+                </a>
+            </div>
+        `;
+        
+        console.log(`ZIP PDF per ${nomeCompleto} generato con successo!`);
+        downloadArea.scrollIntoView({ behavior: 'smooth' });
+
+    } catch (error) {
+        console.error('Errore nella generazione ZIP:', error);
+        
+        const downloadArea = document.getElementById('downloadArea');
+        downloadArea.innerHTML = `
+            <div class="error-box">
+                <h4>Errore nella generazione PDF</h4>
+                <p>Dettagli: ${error.message}</p>
+            </div>
+        `;
+    } finally {
+        btn.innerHTML = 'Crea ZIP PDF per Mese';
+        btn.disabled = false;
+        document.getElementById('progressBar').style.display = 'none';
+        updateProgressBar(0);
+    }
+}
+
+// Esporta tutti i mesi
+async function exportAllMonthsPDF(ricevutePerMese) {
+    const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+    
+    let totalRicevute = 0;
+    let totalRimborsi = 0;
+    
+    Object.values(ricevutePerMese).forEach(ricevuteMese => {
+        totalRicevute += ricevuteMese.length;
+        totalRimborsi += ricevuteMese.reduce((sum, item) => sum + item.person.rimborsoSpese, 0);
+    });
+    
+    const risparmioFiscale = totalRimborsi * 0.20;
+    
+    const conferma = confirm(
+        `EXPORT PDF - TUTTI I MESI\n\n` +
+        `Mesi da esportare: ${Object.keys(ricevutePerMese).length}\n` +
+        `Ricevute totali: ${totalRicevute}\n` +
+        `Rimborsi spese totali: € ${totalRimborsi.toFixed(2)}\n` +
+        `Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+        `Verranno generati ${Object.keys(ricevutePerMese).length} file ZIP separati.\n` +
+        `Procedere?`
+    );
+    
+    if (!conferma) return;
+
+    for (const [meseAnno, ricevuteMese] of Object.entries(ricevutePerMese)) {
+        await exportPDFForMonth(meseAnno, ricevuteMese);
+        // Pausa tra i download per non sovraccaricare il browser
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    alert(`Completato! Generati ${Object.keys(ricevutePerMese).length} file ZIP.`);
+}
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
         return;
