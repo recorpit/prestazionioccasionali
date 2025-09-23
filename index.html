@@ -115,9 +115,16 @@
         // Inizializzazione
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Sistema caricato, verifico librerie...');
-            if (checkLibrariesLoaded()) {
-                console.log('Tutte le librerie sono state caricate correttamente');
-            }
+            // Aspetta che tutti i file JS siano caricati
+            setTimeout(() => {
+                if (typeof checkLibrariesLoaded === 'function') {
+                    if (checkLibrariesLoaded()) {
+                        console.log('Tutte le librerie sono state caricate correttamente');
+                    }
+                } else {
+                    console.log('Funzione checkLibrariesLoaded non ancora disponibile');
+                }
+            }, 100);
         });
     </script>
 </body>
