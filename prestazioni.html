@@ -843,12 +843,18 @@
             previewContainer.innerHTML = '<h4>Anteprima Ricevute Generate:</h4>';
             
             let alertiSuperamento = [];
+            let totalePrestazioni = 0;
+            let totaleRimborsi = 0;
             
             results.forEach((person, index) => {
                 // Controllo limite €2.500
                 const compensoNetto = person.compenso * 0.8;
                 const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
                 const risultatoControllo = checkAndUpdateAnnualAmount(cfKey, compensoNetto);
+                
+                // Accumula i totali
+                totalePrestazioni += person.compenso;
+                totaleRimborsi += person.rimborsoSpese;
                 
                 if (risultatoControllo.superaLimite) {
                     alertiSuperamento.push({
@@ -883,13 +889,27 @@
                     Periodo: ${mesi[person.mese]} ${person.anno}<br>
                     ${person.movimenti.length > 1 ? `Somma di ${person.movimenti.length} movimenti<br>` : ''}
                     Totale movimenti: € ${person.movimentoBancario.toFixed(2)}<br>
-                    ${person.rimborsoSpese > 0 ? `Rimborso spese: € ${person.rimborsoSpese.toFixed(2)}<br>` : ''}
+                    ${person.rimborsoSpese > 0 ? `Rimborso spese: € ${person.rimborsoSpese.toFixed(2)}<br>` : 'Nessun rimborso spese<br>'}
                     Compenso lordo: € ${person.compenso.toFixed(2)}<br>
                     <strong>Netto a pagare: € ${(person.compenso * 0.8 + person.rimborsoSpese).toFixed(2)}</strong><br>
                     Totale annuale: € ${risultatoControllo.nuovoTotale.toFixed(2)}${warningHtml}
                 `;
                 previewContainer.appendChild(previewItem);
             });
+            
+            // Aggiungi riepilogo totali alla fine dell'anteprima
+            const totalsItem = document.createElement('div');
+            totalsItem.style.cssText = 'border: 2px solid #007bff; padding: 15px; margin: 20px 0; background: #e7f3ff; font-weight: bold;';
+            totalsItem.innerHTML = `
+                <h4 style="color: #007bff; margin-top: 0;">📊 RIEPILOGO TOTALI</h4>
+                <div>Numero ricevute generate: <strong>${results.length}</strong></div>
+                <div>Totale prestazioni (lordo): <strong>€ ${totalePrestazioni.toFixed(2)}</strong></div>
+                <div>Totale rimborsi spese: <strong>€ ${totaleRimborsi.toFixed(2)}</strong></div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #007bff;">
+                    <strong>TOTALE COMPLESSIVO: € ${(totalePrestazioni * 0.8 + totaleRimborsi).toFixed(2)}</strong>
+                </div>
+            `;
+            previewContainer.appendChild(totalsItem);
             
             // Mostra alert superamento
             if (alertiSuperamento.length > 0) {
@@ -945,15 +965,15 @@
                 return `
                     <div class="ricevuta">
                         <div class="ricevuta-header">
-                            <div style="text-transform: uppercase;">
-                                ${person.nome} ${person.cognome}<br>
+                            <div style="text-align: left; margin-bottom: 30px;">
+                                <strong>${person.nome} ${person.cognome}</strong><br>
                                 ${person.indirizzo}<br>
                                 ${person.cap} – ${person.citta} – ${person.provincia}<br>
-                                C.F. ${person.codiceFiscale}
+                                ${person.codiceFiscale}
                             </div>
                         </div>
                         
-                        <hr>
+                        <hr style="border: 1px solid #000; margin: 30px 0;">
                         
                         <div class="ricevuta-info">
                             <div>
@@ -964,58 +984,61 @@
                                 P.I. 04433920248
                             </div>
                             <div style="text-align: right;">
-                                <strong>RICEVUTA NUMERO:</strong> ${numeroRicevuta}<br>
-                                <strong>DATA:</strong> ${dateStr}
+                                <strong>RICEVUTA NUM: ${numeroRicevuta}</strong><br>
+                                <strong>DATA: ${dateStr}</strong>
                             </div>
                         </div>
                         
-                        <div style="margin: 20px 0;">
-                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO - ${mesi[person.mese]} ${person.anno}
+                        <div style="margin: 30px 0;">
+                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
                         </div>
                         
-                        <table class="ricevuta-table">
+                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
                             <thead>
-                                <tr>
-                                    <th>DESCRIZIONE COMPENSO</th>
-                                    <th style="text-align: right;">IMPORTO</th>
+                                <tr style="background-color: #003d7a;">
+                                    <th style="color: white; padding: 10px; text-align: left; border: 1px solid #000;">DESCRIZIONE COMPENSO</th>
+                                    <th style="color: white; padding: 10px; text-align: center; border: 1px solid #000;">IMPORTO</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
-                                    <td class="amount">€ ${person.compenso.toFixed(2)}</td>
+                                    <td style="border: 1px solid #000; padding: 10px;">COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;">${person.compenso.toFixed(2)} €</td>
+                                </tr>
+                                <tr style="background-color: #f0f0f0;">
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: center;"><strong>COMPENSO LORDO</strong></td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${person.compenso.toFixed(2)} €</strong></td>
                                 </tr>
                                 <tr>
-                                    <td style="text-align: right;"><strong>COMPENSO LORDO</strong></td>
-                                    <td class="amount"><strong>€ ${person.compenso.toFixed(2)}</strong></td>
+                                    <td style="border: 1px solid #000; padding: 10px;">RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;">${ritenuta.toFixed(2)} €</td>
                                 </tr>
-                                <tr>
-                                    <td>RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
-                                    <td class="amount">€ ${ritenuta.toFixed(2)}</td>
-                                </tr>
-                                <tr>
-                                    <td style="text-align: right;"><strong>NETTO A PAGARE</strong></td>
-                                    <td class="amount"><strong>€ ${compensoNetto.toFixed(2)}</strong></td>
+                                <tr style="background-color: #f0f0f0;">
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: center;"><strong>NETTO A PAGARE</strong></td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${compensoNetto.toFixed(2)} €</strong></td>
                                 </tr>
                             </tbody>
                         </table>
                         
-                        <div class="ricevuta-footer">
+                        <div style="margin-top: 30px; font-size: 12px; line-height: 1.6;">
                             <p><em>${needsStamp ? 'Imposta di bollo da 2,00 euro assolta sull\'originale per importi maggiori di 77,47 euro.' : ''}</em></p>
                             <p><em>Operazione esclusa da IVA ai sensi dell'art. 5 del D.P.R. 633/72.</em></p>
                             
                             <p style="margin-top: 20px;">
                                 • Il sottoscritto dichiara che, nell'anno solare in corso, <strong>alla data odierna</strong>:
                             </p>
-                            <p>
+                            <p style="margin-left: 20px;">
                                 non ha conseguito redditi derivanti dall'esercizio di attività di lavoro autonomo occasionale pari o eccedenti<br>
                                 i 5.000 euro e <strong>si obbliga a comunicare l'eventuale superamento</strong> del limite annuo, anche successivamente<br>
                                 alla data odierna.
                             </p>
                             
-                            <div class="signature-line">
-                                <p>_________________________<br>
-                                <span class="signature">${person.nome} ${person.cognome}</span></p>
+                            <div style="margin-top: 50px; text-align: right;">
+                                <div style="border-bottom: 1px solid #000; width: 200px; margin-left: auto; margin-bottom: 5px;"></div>
+                                <div style="font-family: 'Brush Script MT', cursive; color: #003d7a; font-size: 18px; font-style: italic;">
+                                    ${person.nome} ${person.cognome}
+                                </div>
+                                <div style="font-size: 12px;">(Firma)</div>
                             </div>
                         </div>
                     </div>
@@ -1024,15 +1047,15 @@
                 return `
                     <div class="ricevuta">
                         <div class="ricevuta-header">
-                            <div style="text-transform: uppercase;">
-                                ${person.nome} ${person.cognome}<br>
+                            <div style="text-align: left; margin-bottom: 30px;">
+                                <strong>${person.nome} ${person.cognome}</strong><br>
                                 ${person.indirizzo}<br>
                                 ${person.cap} – ${person.citta} – ${person.provincia}<br>
                                 ${person.codiceFiscale}
                             </div>
                         </div>
                         
-                        <hr>
+                        <hr style="border: 1px solid #000; margin: 30px 0;">
                         
                         <div class="ricevuta-info">
                             <div>
@@ -1043,66 +1066,69 @@
                                 P.I. 04433920248
                             </div>
                             <div style="text-align: right;">
-                                <strong>RICEVUTA NUM:</strong> ${numeroRicevuta}<br>
-                                <strong>DATA:</strong> ${dateStr}
+                                <strong>RICEVUTA NUM: ${numeroRicevuta}</strong><br>
+                                <strong>DATA: ${dateStr}</strong>
                             </div>
                         </div>
                         
-                        <div style="margin: 20px 0;">
-                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO - ${mesi[person.mese]} ${person.anno}
+                        <div style="margin: 30px 0;">
+                            <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
                         </div>
                         
-                        <table class="ricevuta-table">
+                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
                             <thead>
-                                <tr>
-                                    <th>DESCRIZIONE COMPENSO</th>
-                                    <th style="text-align: right;">IMPORTO</th>
+                                <tr style="background-color: #003d7a;">
+                                    <th style="color: white; padding: 10px; text-align: left; border: 1px solid #000;">DESCRIZIONE COMPENSO</th>
+                                    <th style="color: white; padding: 10px; text-align: center; border: 1px solid #000;">IMPORTO</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
-                                    <td class="amount">${person.compenso.toFixed(2)} €</td>
+                                    <td style="border: 1px solid #000; padding: 10px;">COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;">${person.compenso.toFixed(2)} €</td>
                                 </tr>
                                 <tr style="background-color: #f0f0f0;">
-                                    <td style="text-align: center;"><strong>COMPENSO LORDO</strong></td>
-                                    <td class="amount"><strong>${person.compenso.toFixed(2)} €</strong></td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: center;"><strong>COMPENSO LORDO</strong></td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${person.compenso.toFixed(2)} €</strong></td>
                                 </tr>
                                 <tr>
-                                    <td>RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
-                                    <td class="amount">${ritenuta.toFixed(2)} €</td>
+                                    <td style="border: 1px solid #000; padding: 10px;">RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;">${ritenuta.toFixed(2)} €</td>
                                 </tr>
                                 <tr style="background-color: #f0f0f0;">
-                                    <td>COMPENSO NETTO</td>
-                                    <td class="amount">${compensoNetto.toFixed(2)} €</td>
+                                    <td style="border: 1px solid #000; padding: 10px;">COMPENSO NETTO</td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;">${compensoNetto.toFixed(2)} €</td>
                                 </tr>
                                 <tr>
-                                    <td>RIMBORSO SPESE</td>
-                                    <td class="amount">${person.rimborsoSpese.toFixed(2)} €</td>
+                                    <td style="border: 1px solid #000; padding: 10px;">RIMBORSO SPESE</td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;">${person.rimborsoSpese.toFixed(2)} €</td>
                                 </tr>
                                 <tr style="background-color: #e0e0e0;">
-                                    <td style="text-align: center;"><strong>NETTO A PAGARE (COMPRENSIVO DI SPESE)</strong></td>
-                                    <td class="amount"><strong>${nettoPagare.toFixed(2)} €</strong></td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: center;"><strong>NETTO A PAGARE</strong></td>
+                                    <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${nettoPagare.toFixed(2)} €</strong></td>
                                 </tr>
                             </tbody>
                         </table>
                         
-                        <div class="ricevuta-footer">
-                            <p><em>Imposta di bollo da 2,00 euro assolta sull'originale per importi maggiori di 77,47 euro.</em></p>
+                        <div style="margin-top: 30px; font-size: 12px; line-height: 1.6;">
+                            <p><em>${needsStamp ? 'Imposta di bollo da 2,00 euro assolta sull\'originale per importi maggiori di 77,47 euro.' : ''}</em></p>
                             <p><em>Operazione esclusa da IVA ai sensi dell'art. 5 del D.P.R. 633/72.</em></p>
                             
                             <p style="margin-top: 20px;">
                                 • Il sottoscritto dichiara che, nell'anno solare in corso, <strong>alla data odierna</strong>:
                             </p>
-                            <p>
+                            <p style="margin-left: 20px;">
                                 non ha conseguito redditi derivanti dall'esercizio di attività di lavoro autonomo occasionale pari o eccedenti<br>
                                 i 5.000 euro e <strong>si obbliga a comunicare l'eventuale superamento</strong> del limite annuo, anche successivamente<br>
                                 alla data odierna.
                             </p>
                             
-                            <div class="signature-line">
-                                <p style="text-align: center;">_________________________<br>
-                                <span class="signature">${person.nome} ${person.cognome}</span></p>
+                            <div style="margin-top: 50px; text-align: right;">
+                                <div style="border-bottom: 1px solid #000; width: 200px; margin-left: auto; margin-bottom: 5px;"></div>
+                                <div style="font-family: 'Brush Script MT', cursive; color: #003d7a; font-size: 18px; font-style: italic;">
+                                    ${person.nome} ${person.cognome}
+                                </div>
+                                <div style="font-size: 12px;">(Firma)</div>
                             </div>
                         </div>
                     </div>
