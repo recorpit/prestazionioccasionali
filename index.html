@@ -104,12 +104,39 @@
     
     <div id="receiptsContainer"></div>
     
-    <!-- Scripts -->
+    <!-- Scripts - Carica utils.js per primo per evitare problemi di dipendenze -->
     <script src="utils.js"></script>
-    <script src="matching.js"></script>
-    <script src="receipts.js"></script>
-    <script src="pdf-export.js"></script>
-    <script src="excel-export.js"></script>
+    <script>
+        // Attende che utils.js sia completamente caricato prima di procedere
+        function waitForUtils() {
+            return new Promise((resolve) => {
+                if (typeof normalizeString === 'function' && 
+                    typeof getCurrentReceiptNumber === 'function' && 
+                    typeof updateProgressBar === 'function') {
+                    resolve();
+                } else {
+                    setTimeout(() => waitForUtils().then(resolve), 50);
+                }
+            });
+        }
+        
+        // Carica gli altri script dopo utils.js
+        waitForUtils().then(() => {
+            const scripts = [
+                'matching.js',
+                'receipts.js', 
+                'pdf-export.js',
+                'excel-export.js'
+            ];
+            
+            scripts.forEach((scriptSrc, index) => {
+                const script = document.createElement('script');
+                script.src = scriptSrc;
+                script.async = false; // Mantiene l'ordine di esecuzione
+                document.head.appendChild(script);
+            });
+        });
+    </script>
     
     <script>
         // Inizializzazione
