@@ -58,7 +58,7 @@ function generateReceipts() {
         }
         
         const receipt = generateReceipt(person);
-        container.innerHTML += receipt;
+        receiptsContainer.innerHTML += receipt;
         
         // Anteprima
         const numeroRicevuta = getCurrentReceiptNumber(cfKey);
