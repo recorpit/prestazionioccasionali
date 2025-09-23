@@ -3,7 +3,9 @@ function generateReceipts() {
     if (results.length === 0) {
         alert('Nessun match trovato per generare ricevute');
         return;
+            `;
     }
+}
     
     const container = document.getElementById('receiptsContainer');
     const previewContainer = document.getElementById('previewArea');
