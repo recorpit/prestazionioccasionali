@@ -148,6 +148,11 @@
                         console.log('Tutti i moduli JavaScript sono stati caricati');
                         // Verifica che le funzioni principali siano disponibili
                         checkAllFunctions();
+                        
+                        // Forza l'aggiornamento del DOM per far riconoscere le funzioni
+                        setTimeout(() => {
+                            console.log('Funzioni ora disponibili nel contesto globale');
+                        }, 500);
                     }
                 };
                 script.onerror = () => {
