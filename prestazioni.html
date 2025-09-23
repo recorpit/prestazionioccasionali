@@ -324,6 +324,11 @@
                     Esporta Excel
                 </button>
                 
+                <button onclick="exportToExcelByMonth()" 
+                        style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                    Esporta Excel per Mese
+                </button>
+                
                 <button onclick="resetAllCounters()" 
                         style="background: #fd7e14; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
                     Reset Numerazione
@@ -1183,6 +1188,132 @@
             }
         }
         
+        function exportToExcelByMonth() {
+            if (results.length === 0) {
+                alert('Prima devi eseguire il matching e generare le ricevute!');
+                return;
+            }
+
+            // Raggruppa le ricevute per mese
+            const ricevutePerMese = {};
+            
+            results.forEach(person => {
+                const chiaveMese = `${person.anno}-${person.mese.toString().padStart(2, '0')}`;
+                if (!ricevutePerMese[chiaveMese]) {
+                    ricevutePerMese[chiaveMese] = [];
+                }
+                ricevutePerMese[chiaveMese].push(person);
+            });
+
+            // Crea un file Excel per ogni mese
+            Object.keys(ricevutePerMese).forEach(meseAnno => {
+                const ricevuteMese = ricevutePerMese[meseAnno];
+                const [anno, mese] = meseAnno.split('-');
+                const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                                 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+
+                const excelData = [];
+                
+                // Intestazione
+                excelData.push([
+                    'Id Paese',
+                    'Partita Iva', 
+                    'Codice Fiscale',
+                    'Denominazione',
+                    'Cognome',
+                    'Nome',
+                    'Indirizzo',
+                    'Num. civico',
+                    'CAP',
+                    'Comune',
+                    'Provincia',
+                    'Causale',
+                    'Sezionale',
+                    'Tipo Doc.',
+                    'Data Doc.',
+                    'Numero Doc.',
+                    'Data doc. fattura origine',
+                    'Num. doc. fattura origine',
+                    'Descr. Articolo1',
+                    'Imponibile1',
+                    'Aliquota IVA1',
+                    'Natura IVA1',
+                    'Codice IVA1',
+                    'Imposta1',
+                    'Totale Imponibile',
+                    'Totale Imposta',
+                    'Totale Documento',
+                    'Esigibilita\' IVA'
+                ]);
+
+                // Dati per questo mese
+                ricevuteMese.forEach(person => {
+                    const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                    const receiptNumber = getCurrentReceiptNumber(cfKey);
+                    const dataDoc = new Date().toLocaleDateString('it-IT');
+                    const denominazione = `${person.nome} ${person.cognome}`;
+                    
+                    // Separa indirizzo e numero civico
+                    const indirizzoCompleto = person.indirizzo || '';
+                    const indirizzoParti = indirizzoCompleto.split(' ');
+                    let indirizzo = '';
+                    let numCivico = '';
+                    
+                    if (indirizzoParti.length > 0) {
+                        const ultimaParte = indirizzoParti[indirizzoParti.length - 1];
+                        if (/^\d+[a-zA-Z]?$/.test(ultimaParte)) {
+                            numCivico = ultimaParte;
+                            indirizzo = indirizzoParti.slice(0, -1).join(' ');
+                        } else {
+                            indirizzo = indirizzoCompleto;
+                        }
+                    }
+
+                    excelData.push([
+                        'IT',
+                        '',
+                        person.codiceFiscale,
+                        denominazione,
+                        person.cognome,
+                        person.nome,
+                        indirizzo,
+                        numCivico,
+                        person.cap || '',
+                        person.citta || '',
+                        person.provincia || '',
+                        '135',
+                        '4',
+                        'TD01',
+                        dataDoc,
+                        receiptNumber,
+                        dataDoc,
+                        '1',
+                        'COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE',
+                        person.compenso.toFixed(2),
+                        '0',
+                        'N2',
+                        'NI',
+                        '0',
+                        person.compenso.toFixed(2),
+                        '0',
+                        person.compenso.toFixed(2),
+                        'I'
+                    ]);
+                });
+
+                // Crea e scarica il file Excel per questo mese
+                const ws = XLSX.utils.aoa_to_sheet(excelData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, `${mesiNomi[parseInt(mese)]} ${anno}`);
+                
+                const fileName = `Export_Ricevute_${mesiNomi[parseInt(mese)]}_${anno}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+            });
+
+            const numMesi = Object.keys(ricevutePerMese).length;
+            alert(`Generati ${numMesi} file Excel (uno per ogni mese)!`);
+        }
+        
         function exportToExcel() {
             if (results.length === 0) {
                 alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -1196,7 +1327,7 @@
                 'Id Paese',
                 'Partita Iva', 
                 'Codice Fiscale',
-                'Denominazione (nome + cognome)',
+                'Denominazione',
                 'Cognome',
                 'Nome',
                 'Indirizzo',
@@ -1204,23 +1335,23 @@
                 'CAP',
                 'Comune',
                 'Provincia',
-                'Causale (sempre 135)',
-                'Sezionale (sempre 4)',
-                'Tipo Doc. (sempre TF01)',
-                'Data Doc. (data del pagamento)',
-                'Numero Doc. (progressivo)',
-                'Data doc. fattura origine (data del pagamento)',
-                'Num. doc. fattura origine (sempre 1)',
-                'Descr. Articolo1 (sempre "COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE")',
-                'Imponibile1 (totale escluso ritenuta e rimborso)',
-                'Aliquota IVA1 (sempre 0)',
-                'Natura IVA1 (sempre N2)',
-                'Codice IVA1 (sempre NI)',
-                'Imposta1 (SEMPRE 0)',
-                'Totale Imponibile (uguale a imponibile1)',
-                'Totale Imposta (sempre 0)',
-                'Totale Documento (come Imponibile1)',
-                'Esigibilita\' IVA (sempre I)'
+                'Causale',
+                'Sezionale',
+                'Tipo Doc.',
+                'Data Doc.',
+                'Numero Doc.',
+                'Data doc. fattura origine',
+                'Num. doc. fattura origine',
+                'Descr. Articolo1',
+                'Imponibile1',
+                'Aliquota IVA1',
+                'Natura IVA1',
+                'Codice IVA1',
+                'Imposta1',
+                'Totale Imponibile',
+                'Totale Imposta',
+                'Totale Documento',
+                'Esigibilita\' IVA'
             ]);
 
             // Dati
@@ -1247,8 +1378,8 @@
                 }
 
                 excelData.push([
-                    'IT', // Id Paese
-                    '', // Partita Iva
+                    'IT',
+                    '',
                     person.codiceFiscale,
                     denominazione,
                     person.cognome,
@@ -1258,23 +1389,23 @@
                     person.cap || '',
                     person.citta || '',
                     person.provincia || '',
-                    '135', // Causale
-                    '4', // Sezionale
-                    'TF01', // Tipo Doc
-                    dataDoc, // Data Doc
-                    receiptNumber, // Numero Doc
-                    dataDoc, // Data doc fattura origine
-                    '1', // Num doc fattura origine
-                    'COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE', // Descr Articolo1
-                    person.compenso.toFixed(2), // Imponibile1 (compenso lordo)
-                    '0', // Aliquota IVA1
-                    'N2', // Natura IVA1
-                    'NI', // Codice IVA1
-                    '0', // Imposta1
-                    person.compenso.toFixed(2), // Totale Imponibile
-                    '0', // Totale Imposta
-                    person.compenso.toFixed(2), // Totale Documento
-                    'I' // Esigibilita IVA
+                    '135',
+                    '4',
+                    'TD01',
+                    dataDoc,
+                    receiptNumber,
+                    dataDoc,
+                    '1',
+                    'COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE',
+                    person.compenso.toFixed(2),
+                    '0',
+                    'N2',
+                    'NI',
+                    '0',
+                    person.compenso.toFixed(2),
+                    '0',
+                    person.compenso.toFixed(2),
+                    'I'
                 ]);
             });
 
