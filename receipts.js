@@ -330,3 +330,7 @@ function generateReceipt(person) {
         `;
     }
 }
+
+// Esposizione funzioni al contesto globale
+window.generateReceipts = generateReceipts;
+window.generateReceipt = generateReceipt;
