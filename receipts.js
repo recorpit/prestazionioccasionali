@@ -1,9 +1,30 @@
 // Generazione ricevute
 function generateReceipts() {
-    if (results.length === 0) {
+    console.log('generateReceipts chiamata, results:', results);
+    console.log('results.length:', results ? results.length : 'results undefined');
+    
+    if (!results || results.length === 0) {
+        console.log('Nessun result trovato');
         alert('Nessun match trovato per generare ricevute');
         return;
     }
+    
+    console.log('Inizio generazione ricevute per', results.length, 'elementi');
+    
+    const container = document.getElementById('receiptsContainer');
+    const previewContainer = document.getElementById('previewArea');
+    
+    if (!container) {
+        console.error('receiptsContainer non trovato');
+        return;
+    }
+    
+    if (!previewContainer) {
+        console.error('previewArea non trovato');
+        return;
+    }
+    
+    console.log('Container trovati, inizio elaborazione...');
     
     const container = document.getElementById('receiptsContainer');
     const previewContainer = document.getElementById('previewArea');
