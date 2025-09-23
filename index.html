@@ -37,7 +37,7 @@
             <h2>Step 2: Carica Movimenti Bancari</h2>
             <div class="info-box">
                 <strong>Colonne richieste:</strong> "controparte" per il nome, "ADDEBITI" per gli importi<br>
-                <strong>Nuova scala rimborsi:</strong> ≥80€→40€, ≥150€→60€, ≥250€→100€, ≥350€→150€, ≥450€→200€, ≥500€→40% dell'importo
+                <strong>Nuova scala rimborsi:</strong> 20€ sotto 51€, 30€ tra 51-80€, 40€ tra 80-150€, 60€ tra 150-250€, 100€ tra 250-350€, 150€ tra 350-450€, 200€ tra 450-500€, 40% sopra 500€
             </div>
             <input type="file" id="movimentiFile" accept=".xlsx,.xls" disabled>
             <button onclick="loadMovimenti()" disabled id="loadMovimentiBtn">Carica Movimenti</button>
@@ -56,7 +56,11 @@
                 </button>
                 
                 <button onclick="createZipWithPDFs()" id="downloadBtn" class="btn-success" disabled>
-                    Crea ZIP con PDF
+                    Crea ZIP con PDF (Tutti)
+                </button>
+                
+                <button onclick="createZipWithPDFsByMonth()" id="downloadByMonthBtn" class="btn-success" disabled>
+                    Crea ZIP PDF per Mese
                 </button>
                 
                 <button onclick="exportToExcel()" id="exportBtn" class="btn-info" disabled>
