@@ -1,4 +1,4 @@
-// Verifica che le librerie necessarie siano caricate
+// Verifica librerie PDF
 function checkPDFLibraries() {
     const required = ['html2canvas', 'jsPDF', 'JSZip'];
     const missing = [];
@@ -17,7 +17,7 @@ function checkPDFLibraries() {
     return true;
 }
 
-// Funzione per generare anteprima PDF
+// Anteprima PDF
 async function generatePDFPreviews() {
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -133,7 +133,7 @@ async function generatePDFPreviews() {
     }
 }
 
-// Funzione principale per creare ZIP con PDF
+// Creazione ZIP con PDF
 async function createZipWithPDFs() {
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -142,10 +142,11 @@ async function createZipWithPDFs() {
 
     if (!checkPDFLibraries()) return;
 
-    // Calcola e mostra popup rimborsi
+    // Calcola totali rimborsi e risparmio fiscale
     const totaleRimborsi = results.reduce((sum, person) => sum + person.rimborsoSpese, 0);
     const risparmioFiscale = totaleRimborsi * 0.20;
     
+    // Mostra popup informativo
     const conferma = confirm(
         `RIEPILOGO RIMBORSI SPESE\n\n` +
         `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
@@ -220,7 +221,7 @@ async function createZipWithPDFs() {
                 
                 pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
                 
-                // Nome file
+                // Nome file formato: Nome_Cognome_NumeroProgressivo
                 const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
                 const receiptNumber = getCurrentReceiptNumber(cfKey);
                 const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`
@@ -289,7 +290,7 @@ async function createZipWithPDFs() {
             </div>
         `;
     } finally {
-        btn.innerHTML = '📥 Crea ZIP con PDF';
+        btn.innerHTML = 'Crea ZIP con PDF';
         btn.disabled = false;
         document.getElementById('progressBar').style.display = 'none';
         updateProgressBar(0);
