@@ -319,6 +319,11 @@
                     Crea ZIP con PDF
                 </button>
                 
+                <button onclick="generatePDFPreviews()" id="pdfPreviewBtn"
+                        style="background: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;" disabled>
+                    Anteprima PDF
+                </button>
+                
                 <button onclick="exportToExcel()" 
                         style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
                     Esporta Excel
@@ -344,6 +349,7 @@
             <div class="tabs" style="margin-top: 20px;">
                 <button class="tab active" onclick="showTab('matching')">Risultati Matching</button>
                 <button class="tab" onclick="showTab('preview')">Anteprima Ricevute</button>
+                <button class="tab" onclick="showTab('pdfpreview')">Anteprima PDF</button>
             </div>
             
             <div id="matchingTab" class="tab-content active">
@@ -352,6 +358,14 @@
             
             <div id="previewTab" class="tab-content">
                 <div id="previewArea"></div>
+            </div>
+            
+            <div id="pdfpreviewTab" class="tab-content">
+                <div id="pdfPreviewArea">
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        Genera prima le ricevute, poi clicca su "Anteprima PDF" per vedere come appariranno i PDF.
+                    </p>
+                </div>
             </div>
         </div>
     </div>
@@ -419,6 +433,115 @@
                 totaleAttuale: totaleAttuale,
                 nuovoTotale: nuovoTotale
             };
+        }
+        
+        async function generatePDFPreviews() {
+            if (results.length === 0) {
+                alert('Prima devi eseguire il matching e generare le ricevute!');
+                return;
+            }
+
+            const btn = document.getElementById('pdfPreviewBtn');
+            btn.innerHTML = 'Generazione anteprima...';
+            btn.disabled = true;
+
+            const pdfPreviewArea = document.getElementById('pdfPreviewArea');
+            pdfPreviewArea.innerHTML = '<h4>Anteprima PDF Generate:</h4>';
+
+            try {
+                for (let index = 0; index < Math.min(results.length, 5); index++) { // Mostra max 5 anteprime
+                    const person = results[index];
+                    
+                    // Trova l'elemento HTML della ricevuta corrispondente
+                    const receiptElement = document.querySelectorAll('.ricevuta')[index];
+                    
+                    if (!receiptElement) {
+                        console.error(`Ricevuta ${index} non trovata`);
+                        continue;
+                    }
+                    
+                    // Genera immagine con html2canvas
+                    const canvas = await html2canvas(receiptElement, {
+                        scale: 1.5, // Qualità leggermente ridotta per anteprima
+                        backgroundColor: '#ffffff',
+                        logging: false,
+                        useCORS: true,
+                        allowTaint: false
+                    });
+                    
+                    // Crea elemento anteprima
+                    const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+                    const receiptNumber = getCurrentReceiptNumber(cfKey);
+                    const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`;
+                    
+                    const previewDiv = document.createElement('div');
+                    previewDiv.style.cssText = 'border: 2px solid #ddd; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;';
+                    
+                    const previewImage = canvas.toDataURL('image/png');
+                    
+                    previewDiv.innerHTML = `
+                        <div style="display: flex; align-items: flex-start; gap: 20px;">
+                            <div style="flex-shrink: 0;">
+                                <h5 style="margin: 0 0 10px 0; color: #333;">
+                                    ${fileName}
+                                </h5>
+                                <img src="${previewImage}" 
+                                     style="max-width: 300px; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+                                     alt="Anteprima PDF ${fileName}">
+                            </div>
+                            <div style="flex: 1;">
+                                <h6 style="margin: 0 0 10px 0; color: #666;">Dettagli ricevuta:</h6>
+                                <div style="font-size: 14px; line-height: 1.5;">
+                                    <strong>Nome:</strong> ${person.nome} ${person.cognome}<br>
+                                    <strong>CF:</strong> ${person.codiceFiscale}<br>
+                                    <strong>Numero ricevuta:</strong> ${receiptNumber}<br>
+                                    <strong>Compenso lordo:</strong> € ${person.compenso.toFixed(2)}<br>
+                                    ${person.rimborsoSpese > 0 ? `<strong>Rimborso spese:</strong> € ${person.rimborsoSpese.toFixed(2)}<br>` : ''}
+                                    <strong>Netto a pagare:</strong> € ${(person.compenso * 0.8 + person.rimborsoSpese).toFixed(2)}
+                                </div>
+                                <div style="margin-top: 10px; padding: 8px; background: #e8f5e9; border-radius: 4px; font-size: 12px; color: #155724;">
+                                    ✓ PDF pronto per il download
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    pdfPreviewArea.appendChild(previewDiv);
+                }
+                
+                // Se ci sono più di 5 ricevute, mostra messaggio
+                if (results.length > 5) {
+                    const moreDiv = document.createElement('div');
+                    moreDiv.style.cssText = 'text-align: center; padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; margin: 20px 0;';
+                    moreDiv.innerHTML = `
+                        <strong>Anteprima limitata</strong><br>
+                        Mostrate ${Math.min(5, results.length)} di ${results.length} ricevute.<br>
+                        Tutte le ${results.length} ricevute saranno incluse nel download ZIP.
+                    `;
+                    pdfPreviewArea.appendChild(moreDiv);
+                }
+
+            } catch (error) {
+                console.error('Errore nell\'anteprima PDF:', error);
+                pdfPreviewArea.innerHTML = `
+                    <div class="error-box">
+                        Errore nella generazione dell'anteprima: ${error.message}
+                    </div>
+                `;
+            } finally {
+                btn.innerHTML = 'Anteprima PDF';
+                btn.disabled = false;
+                
+                // Attiva automaticamente il tab anteprima PDF
+                document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                
+                const pdfTab = document.querySelectorAll('.tab')[2]; // Terzo tab
+                pdfTab.classList.add('active');
+                document.getElementById('pdfpreviewTab').classList.add('active');
+                
+                pdfPreviewArea.scrollIntoView({ behavior: 'smooth' });
+            }
         }
         
         function showTab(tabName) {
@@ -929,6 +1052,7 @@
             
             // Abilita download
             document.getElementById('downloadBtn').disabled = false;
+            document.getElementById('pdfPreviewBtn').disabled = false;
             
             // Mostra tab anteprima - correzione
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
