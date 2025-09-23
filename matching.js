@@ -156,6 +156,45 @@ function findBestMatch(movimento, iscrizioni) {
     });
 }
 
+// Calcolo similarità (Levenshtein) - duplicata qui per evitare dipendenze
+function calculateSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    
+    const s1 = normalizeString(str1);
+    const s2 = normalizeString(str2);
+    
+    if (s1 === s2) return 1;
+    
+    const matrix = [];
+    const len1 = s1.length;
+    const len2 = s2.length;
+    
+    for (let i = 0; i <= len2; i++) {
+        matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= len1; j++) {
+        matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= len2; i++) {
+        for (let j = 1; j <= len1; j++) {
+            if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+    
+    const maxLen = Math.max(len1, len2);
+    return maxLen === 0 ? 1 : (maxLen - matrix[len2][len1]) / maxLen;
+}
+
 // Trova corrispondenze simili per matching fuzzy
 function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
     const suggestions = [];
