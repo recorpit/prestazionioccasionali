@@ -129,13 +129,48 @@
                 'excel-export.js'
             ];
             
+            let loadedScripts = 0;
+            
             scripts.forEach((scriptSrc, index) => {
                 const script = document.createElement('script');
                 script.src = scriptSrc;
                 script.async = false; // Mantiene l'ordine di esecuzione
+                script.onload = () => {
+                    loadedScripts++;
+                    console.log(`Caricato: ${scriptSrc}`);
+                    
+                    // Quando tutti i script sono caricati
+                    if (loadedScripts === scripts.length) {
+                        console.log('Tutti i moduli JavaScript sono stati caricati');
+                        // Verifica che le funzioni principali siano disponibili
+                        checkAllFunctions();
+                    }
+                };
+                script.onerror = () => {
+                    console.error(`Errore nel caricamento di: ${scriptSrc}`);
+                };
                 document.head.appendChild(script);
             });
         });
+        
+        function checkAllFunctions() {
+            const functions = [
+                'performMatching',
+                'generateReceipts', 
+                'generatePDFPreviews',
+                'createZipWithPDFs',
+                'exportToExcel',
+                'exportToExcelByMonth'
+            ];
+            
+            const missing = functions.filter(func => typeof window[func] !== 'function');
+            
+            if (missing.length > 0) {
+                console.error('Funzioni mancanti:', missing);
+            } else {
+                console.log('Tutte le funzioni sono disponibili');
+            }
+        }
     </script>
     
     <script>
