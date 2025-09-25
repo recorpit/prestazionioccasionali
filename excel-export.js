@@ -68,7 +68,7 @@ function exportToExcelByMonth() {
         
         if (sceltaNum === 0) {
             // Esporta tutti i mesi separatamente
-            await exportAllMonthsExcel(ricevutePerMese, totaleRimborsi, risparmioFiscale);
+            exportAllMonthsExcel(ricevutePerMese, totaleRimborsi, risparmioFiscale);
         } else if (sceltaNum >= 1 && sceltaNum <= mesiDisponibili.length) {
             const meseSelezionato = mesiDisponibili[sceltaNum - 1];
             const rimborsiMese = ricevutePerMese[meseSelezionato].reduce((sum, p) => sum + (p.rimborsoSpese || 0), 0);
