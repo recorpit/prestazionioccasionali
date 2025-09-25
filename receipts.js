@@ -1,11 +1,11 @@
-// Generazione ricevute
+// Generazione ricevute - VERSIONE SEMPLIFICATA
 function generateReceipts() {
     console.log('generateReceipts chiamata, results:', results);
     console.log('results.length:', results ? results.length : 'results undefined');
     
     if (!results || results.length === 0) {
         console.log('Nessun result trovato');
-        alert('Nessun match trovato per generare ricevute');
+        alert('Nessuna ricevuta da generare. Esegui prima il matching e clicca "Procedi alla Generazione".');
         return;
     }
     
@@ -26,11 +26,8 @@ function generateReceipts() {
     
     console.log('Container trovati, inizio elaborazione...');
     
-    const container = document.getElementById('receiptsContainer');
-    const previewContainer = document.getElementById('previewArea');
-    
     container.innerHTML = '';
-    previewContainer.innerHTML = '<h4>Anteprima Ricevute Generate:</h4>';
+    previewContainer.innerHTML = '<h3>📋 Anteprima Ricevute Generate</h3>';
     
     let alertiSuperamento = [];
     let totalePrestazioni = 0;
@@ -58,71 +55,116 @@ function generateReceipts() {
         }
         
         const receipt = generateReceipt(person);
-        receiptsContainer.innerHTML += receipt;
+        container.innerHTML += receipt;
         
-        // Anteprima
+        // Anteprima con dettagli movimenti
         const numeroRicevuta = getCurrentReceiptNumber(cfKey);
         const previewItem = document.createElement('div');
-        previewItem.style.cssText = 'border: 1px solid #ddd; padding: 10px; margin: 10px 0; background: #f9f9f9;';
+        previewItem.style.cssText = 'border: 1px solid #dee2e6; padding: 15px; margin: 15px 0; background: #f8f9fa; border-radius: 8px;';
         
         let warningHtml = '';
         if (risultatoControllo.superaLimite) {
-            warningHtml = '<br><span style="color: red; font-weight: bold;">⚠️ ATTENZIONE: Supera limite €2500!</span>';
+            warningHtml = '<br><span style="color: #dc3545; font-weight: bold;">⚠️ ATTENZIONE: Supera limite €2500!</span>';
         }
         
         const mesi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
                      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
         
+        // Dettaglio movimenti se presente
+        let movimentiDettaglio = '';
+        if (person.dettaglioMovimenti && person.dettaglioMovimenti.length > 0) {
+            movimentiDettaglio = '<br><strong>Dettaglio movimenti:</strong><br>';
+            person.dettaglioMovimenti.forEach(mov => {
+                movimentiDettaglio += `• ${mov.controparte}: €${mov.importo.toFixed(2)} (${mov.data.toLocaleDateString('it-IT')})<br>`;
+            });
+        }
+        
         previewItem.innerHTML = `
-            <strong>#${numeroRicevuta} - ${person.nome} ${person.cognome}</strong><br>
-            CF: ${person.codiceFiscale}<br>
-            Periodo: ${mesi[person.mese]} ${person.anno}<br>
-            ${person.movimenti.length > 1 ? `Somma di ${person.movimenti.length} movimenti<br>` : ''}
-            Totale movimenti: € ${person.movimentoBancario.toFixed(2)}<br>
-            ${person.rimborsoSpese > 0 ? `Rimborso spese: € ${person.rimborsoSpese.toFixed(2)}<br>` : 'Nessun rimborso spese<br>'}
-            Compenso lordo: € ${person.compenso.toFixed(2)}<br>
-            <strong>Netto a pagare: € ${(person.compenso * 0.8 + person.rimborsoSpese).toFixed(2)}</strong><br>
-            Totale annuale: € ${risultatoControllo.nuovoTotale.toFixed(2)}${warningHtml}
+            <div style="display: grid; grid-template-columns: 1fr 200px; gap: 15px; align-items: start;">
+                <div>
+                    <h4 style="margin: 0 0 10px 0; color: #495057;">
+                        #${numeroRicevuta} - ${person.nome} ${person.cognome}
+                    </h4>
+                    <div style="font-size: 14px; line-height: 1.6;">
+                        <strong>CF:</strong> ${person.codiceFiscale}<br>
+                        <strong>Periodo:</strong> ${mesi[person.mese]} ${person.anno}<br>
+                        ${person.movimenti && person.movimenti.length > 1 ? `<strong>Movimenti aggregati:</strong> ${person.movimenti.length}<br>` : ''}
+                        ${movimentiDettaglio}
+                        <strong>Movimento bancario totale:</strong> €${person.movimentoBancario.toFixed(2)}<br>
+                        ${person.rimborsoSpese > 0 ? `<strong>Rimborso spese:</strong> €${person.rimborsoSpese.toFixed(2)}<br>` : '<em>Nessun rimborso spese</em><br>'}
+                        <strong>Compenso lordo:</strong> €${person.compenso.toFixed(2)}<br>
+                        <strong>Totale annuale:</strong> €${risultatoControllo.nuovoTotale.toFixed(2)}${warningHtml}
+                    </div>
+                </div>
+                <div style="background: #e8f5e9; padding: 10px; border-radius: 5px; text-align: center;">
+                    <strong style="color: #155724;">Netto a Pagare</strong><br>
+                    <span style="font-size: 18px; font-weight: bold; color: #155724;">
+                        €${(person.compenso * 0.8 + person.rimborsoSpese).toFixed(2)}
+                    </span>
+                </div>
+            </div>
         `;
         previewContainer.appendChild(previewItem);
     });
     
     // Aggiungi riepilogo totali alla fine dell'anteprima
     const totalsItem = document.createElement('div');
-    totalsItem.style.cssText = 'border: 2px solid #007bff; padding: 15px; margin: 20px 0; background: #e7f3ff; font-weight: bold;';
+    totalsItem.style.cssText = 'border: 2px solid #007bff; padding: 20px; margin: 25px 0; background: #e3f2fd; border-radius: 10px;';
     totalsItem.innerHTML = `
-        <h4 style="color: #007bff; margin-top: 0;">RIEPILOGO TOTALI</h4>
-        <div>Numero ricevute generate: <strong>${results.length}</strong></div>
-        <div>Totale prestazioni (lordo): <strong>€ ${totalePrestazioni.toFixed(2)}</strong></div>
-        <div>Totale rimborsi spese: <strong>€ ${totaleRimborsi.toFixed(2)}</strong></div>
-        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #007bff;">
-            <strong>TOTALE COMPLESSIVO: € ${(totalePrestazioni * 0.8 + totaleRimborsi).toFixed(2)}</strong>
+        <h4 style="color: #1976d2; margin-top: 0; text-align: center;">📊 RIEPILOGO TOTALI RICEVUTE</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; text-align: center;">
+            <div style="background: white; padding: 15px; border-radius: 8px;">
+                <strong style="color: #495057;">Ricevute Generate</strong><br>
+                <span style="font-size: 24px; font-weight: bold; color: #007bff;">${results.length}</span>
+            </div>
+            <div style="background: white; padding: 15px; border-radius: 8px;">
+                <strong style="color: #495057;">Prestazioni Lordo</strong><br>
+                <span style="font-size: 20px; font-weight: bold; color: #28a745;">€${totalePrestazioni.toFixed(2)}</span>
+            </div>
+            <div style="background: white; padding: 15px; border-radius: 8px;">
+                <strong style="color: #495057;">Rimborsi Spese</strong><br>
+                <span style="font-size: 20px; font-weight: bold; color: #ffc107;">€${totaleRimborsi.toFixed(2)}</span>
+            </div>
+            <div style="background: white; padding: 15px; border-radius: 8px;">
+                <strong style="color: #495057;">Totale Netto</strong><br>
+                <span style="font-size: 20px; font-weight: bold; color: #dc3545;">€${(totalePrestazioni * 0.8 + totaleRimborsi).toFixed(2)}</span>
+            </div>
+        </div>
+        <div style="margin-top: 15px; padding: 15px; background: #d4edda; border-radius: 8px; text-align: center;">
+            <strong style="color: #155724;">💰 Risparmio Fiscale (20%): €${(totaleRimborsi * 0.2).toFixed(2)}</strong>
         </div>
     `;
     previewContainer.appendChild(totalsItem);
     
-    // Mostra alert superamento
+    // Mostra alert superamento se necessario
     if (alertiSuperamento.length > 0) {
         let messaggioAlert = '⚠️ ATTENZIONE - SUPERAMENTO LIMITE €2500 NETTI ANNUALI!\n\n';
         messaggioAlert += 'I seguenti artisti superano il limite con questa ricevuta:\n\n';
         
         alertiSuperamento.forEach(alert => {
             messaggioAlert += `${alert.nome} ${alert.cognome} (CF: ${alert.cf})\n`;
-            messaggioAlert += `- Totale precedente: € ${alert.totalePrec.toFixed(2)}\n`;
-            messaggioAlert += `- Compenso questa ricevuta: € ${alert.compensoRicevuta.toFixed(2)}\n`;
-            messaggioAlert += `- NUOVO TOTALE: € ${alert.nuovoTotale.toFixed(2)}\n\n`;
+            messaggioAlert += `- Totale precedente: €${alert.totalePrec.toFixed(2)}\n`;
+            messaggioAlert += `- Compenso questa ricevuta: €${alert.compensoRicevuta.toFixed(2)}\n`;
+            messaggioAlert += `- NUOVO TOTALE: €${alert.nuovoTotale.toFixed(2)}\n\n`;
         });
         
         messaggioAlert += 'Questi artisti potrebbero dover aprire Partita IVA!';
         alert(messaggioAlert);
     }
     
-    // Abilita download e anteprima PDF
-    document.getElementById('downloadBtn').disabled = false;
-    document.getElementById('downloadByMonthBtn').disabled = false;
-    document.getElementById('pdfPreviewBtn').disabled = false;
-    document.getElementById('exportBtn').disabled = false;
-    document.getElementById('exportByMonthBtn').disabled = false;
+    // Abilita tutti i pulsanti di export
+    const buttonsToEnable = [
+        'downloadBtn', 'downloadByMonthBtn', 'pdfPreviewBtn', 
+        'exportBtn', 'exportByMonthBtn'
+    ];
+    
+    buttonsToEnable.forEach(buttonId => {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.disabled = false;
+            console.log(`Pulsante ${buttonId} abilitato`);
+        }
+    });
     
     // Mostra tab anteprima
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
@@ -130,13 +172,18 @@ function generateReceipts() {
     
     const tabs = document.querySelectorAll('.tab');
     const previewTab = tabs[1]; // Il secondo tab è l'anteprima
-    previewTab.classList.add('active');
-    document.getElementById('previewTab').classList.add('active');
+    if (previewTab) {
+        previewTab.classList.add('active');
+        document.getElementById('previewTab').classList.add('active');
+    }
     
     document.getElementById('previewArea').scrollIntoView({ behavior: 'smooth' });
+    
+    console.log(`✅ Ricevute generate con successo: ${results.length}`);
+    alert(`✅ Generazione completata!\n\n${results.length} ricevute HTML create.\nRisparmio fiscale totale: €${(totaleRimborsi * 0.2).toFixed(2)}\n\nI pulsanti di export sono ora attivi.`);
 }
 
-// Generazione HTML ricevuta singola
+// Generazione HTML ricevuta singola - UGUALE ALL'ORIGINALE
 function generateReceipt(person) {
     const today = new Date();
     const dateStr = today.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -150,9 +197,6 @@ function generateReceipt(person) {
     const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
     const numeroRicevuta = getNextReceiptNumber(cfKey);
     
-    const mesi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
-                 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
-    
     // Template HTML ricevuta - formato identico all'originale
     if (person.rimborsoSpese === 0) {
         // Ricevuta SENZA rimborso spese
@@ -162,7 +206,7 @@ function generateReceipt(person) {
                     <div style="text-align: left; margin-bottom: 30px;">
                         <strong>${person.nome} ${person.cognome}</strong><br>
                         ${person.indirizzo}<br>
-                        ${person.cap} – ${person.citta} – ${person.provincia}<br>
+                        ${person.cap} — ${person.citta} — ${person.provincia}<br>
                         ${person.codiceFiscale}
                     </div>
                 </div>
@@ -174,7 +218,7 @@ function generateReceipt(person) {
                         <strong>SPETT.LE</strong><br>
                         OKL SRL<br>
                         VIA MONTE PASUBIO<br>
-                        36010 – ZANE' – (VI)<br>
+                        36010 — ZANE' — (VI)<br>
                         P.I. 04433920248
                     </div>
                     <div style="text-align: right;">
@@ -245,7 +289,7 @@ function generateReceipt(person) {
                     <div style="text-align: left; margin-bottom: 30px;">
                         <strong>${person.nome} ${person.cognome}</strong><br>
                         ${person.indirizzo}<br>
-                        ${person.cap} – ${person.citta} – ${person.provincia}<br>
+                        ${person.cap} — ${person.citta} — ${person.provincia}<br>
                         ${person.codiceFiscale}
                     </div>
                 </div>
@@ -257,7 +301,7 @@ function generateReceipt(person) {
                         <strong>SPETT.LE</strong><br>
                         OKL SRL<br>
                         VIA MONTE PASUBIO<br>
-                        36010 – ZANE' – (VI)<br>
+                        36010 — ZANE' — (VI)<br>
                         P.I. 04433920248
                     </div>
                     <div style="text-align: right;">
