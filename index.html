@@ -17,15 +17,15 @@
 <body>
     <div class="container no-print">
         <h1>Generatore Ricevute per Prestazioni Artistiche</h1>
-        <p>Sistema automatizzato per generare ricevute incrociando dati anagrafici e movimenti bancari</p>
+        <p>Sistema automatizzato per generare ricevute processando SOLO movimenti di persone presenti nelle iscrizioni</p>
         
         <!-- Step 1: Carica file iscrizioni -->
         <div class="step" id="step1">
             <h2>Step 1: Carica File Iscrizioni</h2>
             <div class="info-box">
                 <strong>Formato richiesto:</strong> File Excel (.xlsx) con foglio "ISCRIZIONI"<br>
-                Colonna B: Codice Fiscale | Colonna C: Cognome | Colonna D: Nome<br>
-                Colonna H: Indirizzo | Colonna I: Città | Colonna J: Provincia | Colonna K: CAP | Colonna M: P.IVA
+                <strong>Struttura:</strong> Colonna B=CF, C=Cognome, D=Nome, H=Indirizzo, I=Città, J=Provincia, K=CAP, M=P.IVA<br>
+                <em>Solo i movimenti di persone presenti in questo file verranno processati</em>
             </div>
             <input type="file" id="iscrizioniFile" accept=".xlsx,.xls">
             <button onclick="loadIscrizioni()">Carica Iscrizioni</button>
@@ -36,8 +36,11 @@
         <div class="step inactive" id="step2">
             <h2>Step 2: Carica Movimenti Bancari</h2>
             <div class="info-box">
-                <strong>Colonne richieste:</strong> "controparte" per il nome, "ADDEBITI" per gli importi<br>
-                <strong>Nuova scala rimborsi:</strong> 20€ sotto 51€, 30€ tra 51-80€, 40€ tra 80-150€, 60€ tra 150-250€, 100€ tra 250-350€, 150€ tra 350-450€, 200€ tra 450-500€, 40% sopra 500€
+                <strong>Logica di processing:</strong><br>
+                • <strong>ADDEBITI</strong> (Colonna G): Pagamenti verso artisti → Genereranno ricevute<br>
+                • <strong>ACCREDITI</strong> (Colonna F): Bonifici ricevuti → Controllo per possibili rimborsi<br>
+                • <strong>Colonna CONTROPARTE</strong> (C): Usata per matching con nomi iscrizioni<br><br>
+                <strong>Scala rimborsi:</strong> 20€ sotto 51€, 30€ tra 51-80€, 40€ tra 80-150€, 60€ tra 150-250€, 100€ tra 250-350€, 150€ tra 350-450€, 200€ tra 450-500€, 40% sopra 500€
             </div>
             <input type="file" id="movimentiFile" accept=".xlsx,.xls" disabled>
             <button onclick="loadMovimenti()" disabled id="loadMovimentiBtn">Carica Movimenti</button>
@@ -46,34 +49,57 @@
         
         <!-- Step 3: Matching e generazione -->
         <div class="step inactive" id="step3">
-            <h2>Step 3: Matching e Generazione Ricevute</h2>
-            <button onclick="performMatching()" disabled id="matchBtn">Esegui Matching</button>
-            <button onclick="generateReceipts()" disabled id="generateBtn">Genera Ricevute</button>
+            <h2>Step 3: Matching Intelligente e Generazione</h2>
+            <div class="info-box">
+                <strong>Il sistema processerà:</strong><br>
+                ✅ ADDEBITI verso persone nelle iscrizioni → Ricevute automatiche<br>
+                ⚠️ ACCREDITI da persone nelle iscrizioni → Controllo manuale (possibili rimborsi)<br>
+                📁 ADDEBITI verso persone NON nelle iscrizioni → Archivio per gestione manuale<br>
+                🚫 ACCREDITI da persone NON nelle iscrizioni → Completamente ignorati
+            </div>
             
-            <div style="margin-top: 10px;">
-                <button onclick="generatePDFPreviews()" id="pdfPreviewBtn" class="btn-purple" disabled>
-                    Anteprima PDF
-                </button>
-                
-                <button onclick="createZipWithPDFs()" id="downloadBtn" class="btn-success" disabled>
-                    Crea ZIP con PDF (Tutti)
-                </button>
-                
-                <button onclick="createZipWithPDFsByMonth()" id="downloadByMonthBtn" class="btn-success" disabled>
-                    Crea ZIP PDF per Mese
-                </button>
-                
-                <button onclick="exportToExcel()" id="exportBtn" class="btn-info" disabled>
-                    Esporta Excel
-                </button>
-                
-                <button onclick="exportToExcelByMonth()" id="exportByMonthBtn" class="btn-info" disabled>
-                    Esporta Excel per Mese
-                </button>
-                
-                <button onclick="resetAllCounters()" class="btn-warning">
-                    Reset Numerazione
-                </button>
+            <button onclick="performMatching()" disabled id="matchBtn" style="background: #007bff; font-size: 16px; padding: 12px 24px;">
+                🔍 Esegui Matching Intelligente
+            </button>
+            
+            <button onclick="generateReceipts()" disabled id="generateBtn" style="background: #28a745; font-size: 16px; padding: 12px 24px;">
+                📄 Genera Ricevute HTML
+            </button>
+            
+            <!-- Controlli Export -->
+            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                <h4 style="margin-top: 0; color: #495057;">🎯 Opzioni Export</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    <button onclick="generatePDFPreviews()" id="pdfPreviewBtn" disabled
+                            style="background: #6f42c1; color: white; padding: 10px; border: none; border-radius: 5px;">
+                        👁️ Anteprima PDF
+                    </button>
+                    
+                    <button onclick="createZipWithPDFs()" id="downloadBtn" disabled
+                            style="background: #dc3545; color: white; padding: 10px; border: none; border-radius: 5px;">
+                        📦 ZIP PDF (Tutti)
+                    </button>
+                    
+                    <button onclick="createZipWithPDFsByMonth()" id="downloadByMonthBtn" disabled
+                            style="background: #fd7e14; color: white; padding: 10px; border: none; border-radius: 5px;">
+                        📅 ZIP PDF per Mese
+                    </button>
+                    
+                    <button onclick="exportToExcel()" id="exportBtn" disabled
+                            style="background: #20c997; color: white; padding: 10px; border: none; border-radius: 5px;">
+                        📊 Export Excel
+                    </button>
+                    
+                    <button onclick="exportToExcelByMonth()" id="exportByMonthBtn" disabled
+                            style="background: #17a2b8; color: white; padding: 10px; border: none; border-radius: 5px;">
+                        🗓️ Excel per Mese
+                    </button>
+                    
+                    <button onclick="resetAllCounters()" 
+                            style="background: #6c757d; color: white; padding: 10px; border: none; border-radius: 5px;">
+                        🔄 Reset Numerazione
+                    </button>
+                </div>
             </div>
             
             <div class="progress-bar" id="progressBar">
@@ -82,25 +108,57 @@
             
             <div id="downloadArea"></div>
             
-            <div class="tabs" style="margin-top: 20px;">
-                <button class="tab active" onclick="showTab('matching')">Risultati Matching</button>
-                <button class="tab" onclick="showTab('preview')">Anteprima Ricevute</button>
-                <button class="tab" onclick="showTab('pdfpreview')">Anteprima PDF</button>
+            <!-- Tab Navigation -->
+            <div class="tabs" style="margin-top: 30px;">
+                <button class="tab active" onclick="showTab('matching')">🎯 Risultati Matching</button>
+                <button class="tab" onclick="showTab('preview')">📋 Anteprima Ricevute</button>
+                <button class="tab" onclick="showTab('pdfpreview')">🖼️ Anteprima PDF</button>
             </div>
             
             <div id="matchingTab" class="tab-content active">
-                <div id="matchingResult"></div>
+                <div id="matchingResult">
+                    <p style="text-align: center; color: #6c757d; padding: 40px; font-style: italic;">
+                        Carica i file Excel e clicca su "Esegui Matching Intelligente" per vedere i risultati dell'analisi automatica.
+                    </p>
+                </div>
             </div>
             
             <div id="previewTab" class="tab-content">
-                <div id="previewArea"></div>
+                <div id="previewArea">
+                    <p style="text-align: center; color: #6c757d; padding: 40px; font-style: italic;">
+                        Dopo il matching, clicca su "Genera Ricevute HTML" per vedere l'anteprima delle ricevute che verranno create.
+                    </p>
+                </div>
             </div>
             
             <div id="pdfpreviewTab" class="tab-content">
                 <div id="pdfPreviewArea">
-                    <p style="text-align: center; color: #666; padding: 20px;">
-                        Genera prima le ricevute, poi clicca su "Anteprima PDF" per vedere come appariranno i PDF.
+                    <p style="text-align: center; color: #6c757d; padding: 40px; font-style: italic;">
+                        Dopo aver generato le ricevute HTML, clicca su "Anteprima PDF" per vedere come appariranno i documenti finali.
                     </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Info Box aggiuntive -->
+        <div style="margin-top: 30px; background: #e3f2fd; padding: 20px; border-radius: 10px; border-left: 5px solid #2196f3;">
+            <h3 style="color: #1976d2; margin-top: 0;">💡 Come Funziona il Sistema</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div>
+                    <strong>1️⃣ Matching Automatico</strong><br>
+                    <small>Il sistema matcha automaticamente le controparti dei movimenti bancari con i nomi nel file iscrizioni</small>
+                </div>
+                <div>
+                    <strong>2️⃣ Separazione Intelligente</strong><br>
+                    <small>Divide addebiti (ricevute) da accrediti (possibili rimborsi) per controllo preciso</small>
+                </div>
+                <div>
+                    <strong>3️⃣ Archivio Non Matchati</strong><br>
+                    <small>Conserva movimenti di persone non nelle iscrizioni per gestione manuale</small>
+                </div>
+                <div>
+                    <strong>4️⃣ Controllo Duplicati</strong><br>
+                    <small>Evidenzia possibili bonifici errati quando ci sono sia addebiti che accrediti per la stessa persona</small>
                 </div>
             </div>
         </div>
@@ -146,13 +204,7 @@
                     // Quando tutti i script sono caricati
                     if (loadedScripts === scripts.length) {
                         console.log('Tutti i moduli JavaScript sono stati caricati');
-                        // Verifica che le funzioni principali siano disponibili
                         checkAllFunctions();
-                        
-                        // Forza l'aggiornamento del DOM per far riconoscere le funzioni
-                        setTimeout(() => {
-                            console.log('Funzioni ora disponibili nel contesto globale');
-                        }, 500);
                     }
                 };
                 script.onerror = () => {
@@ -168,8 +220,10 @@
                 'generateReceipts', 
                 'generatePDFPreviews',
                 'createZipWithPDFs',
+                'createZipWithPDFsByMonth',
                 'exportToExcel',
-                'exportToExcelByMonth'
+                'exportToExcelByMonth',
+                'resetAllCounters'
             ];
             
             const missing = functions.filter(func => typeof window[func] !== 'function');
@@ -177,7 +231,7 @@
             if (missing.length > 0) {
                 console.error('Funzioni mancanti:', missing);
             } else {
-                console.log('Tutte le funzioni sono disponibili');
+                console.log('✅ Tutte le funzioni sono disponibili');
             }
         }
     </script>
@@ -186,14 +240,13 @@
         // Inizializzazione
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Sistema caricato, verifico librerie...');
-            // Aspetta che tutti i file JS siano caricati
             setTimeout(() => {
                 if (typeof checkLibrariesLoaded === 'function') {
                     if (checkLibrariesLoaded()) {
-                        console.log('Tutte le librerie sono state caricate correttamente');
+                        console.log('✅ Tutte le librerie sono caricate correttamente');
                     }
                 } else {
-                    console.log('Funzione checkLibrariesLoaded non ancora disponibile');
+                    console.log('⏳ Funzione checkLibrariesLoaded in caricamento...');
                 }
             }, 100);
         });
