@@ -1,10 +1,9 @@
-// Variabili locali per gestione matching (results è già dichiarato in utils.js)
+// Variabili locali per gestione matching
 let allMovimentiProcessati = [];
 let movimentiMatchati = [];
 let movimentiNonMatchati = [];
 let movimentiIgnorati = [];
 let accreditiDaControllare = [];
-// results è già dichiarato in utils.js come variabile globale
 
 // Normalizzazione stringhe
 function normalizeString(str) {
@@ -53,6 +52,133 @@ function calculateSimilarity(str1, str2) {
     
     const maxLen = Math.max(len1, len2);
     return maxLen === 0 ? 1 : (maxLen - matrix[len2][len1]) / maxLen;
+}
+
+// Trova corrispondenze simili per controllo manuale
+function findSimilarMatches(controparte, iscrizioni, threshold = 0.7) {
+    const suggestions = [];
+    
+    iscrizioni.forEach(isc => {
+        const nome = isc.D;
+        const cognome = isc.C;
+        
+        if (!nome || !cognome) return;
+        
+        const nomeCompleto = `${nome} ${cognome}`;
+        const similarity = calculateSimilarity(controparte, nomeCompleto);
+        
+        if (similarity >= threshold && similarity < 1) { // Escludi match perfetti (già processati)
+            suggestions.push({
+                iscrizione: isc,
+                nomeCompleto: nomeCompleto,
+                similarity: similarity
+            });
+        }
+    });
+    
+    // Ordina per similarità decrescente
+    return suggestions.sort((a, b) => b.similarity - a.similarity).slice(0, 5); // Max 5 suggerimenti
+}
+
+// Dialog per gestione manuale nomi simili
+async function showUnmatchedDialog(notMatched) {
+    return new Promise((resolve) => {
+        let manualMatches = [];
+        let currentIndex = 0;
+        
+        function showNextUnmatched() {
+            if (currentIndex >= notMatched.length) {
+                resolve(manualMatches);
+                return;
+            }
+            
+            const movimento = notMatched[currentIndex].movimento;
+            const controparte = findColumnValue(movimento, ['CONTROPARTE', 'Controparte', 'controparte', 'C']);
+            const importo = getAddebitiFromMovimento(movimento);
+            const data = getDataFromMovimento(movimento);
+            
+            // Trova suggerimenti simili
+            const suggestions = findSimilarMatches(controparte, iscrizioniData);
+            
+            let message = `CONTROLLO MANUALE NOMI SIMILI\n`;
+            message += `Movimento ${currentIndex + 1} di ${notMatched.length}\n\n`;
+            message += `Controparte: "${controparte}"\n`;
+            message += `Importo: €${importo.toFixed(2)}\n`;
+            message += `Data: ${data.toLocaleDateString('it-IT')}\n\n`;
+            
+            if (suggestions.length > 0) {
+                message += `POSSIBILI CORRISPONDENZE SIMILI:\n\n`;
+                suggestions.forEach((sugg, idx) => {
+                    const similarity = (sugg.similarity * 100).toFixed(1);
+                    message += `${idx + 1}. ${sugg.nomeCompleto} (${similarity}% simile)\n`;
+                    message += `   CF: ${sugg.iscrizione.B}\n`;
+                    message += `   Indirizzo: ${sugg.iscrizione.H || 'N/D'}\n\n`;
+                });
+                message += `SCEGLI UN'OPZIONE:\n`;
+                message += `1-${suggestions.length}: Associa al numero corrispondente\n`;
+                message += `S: Salta (metti in archivio)\n`;
+                message += `T: Termina controllo\n\n`;
+                message += `Scelta:`;
+                
+                const choice = prompt(message);
+                
+                if (choice === null || choice.toUpperCase() === 'T') {
+                    resolve(manualMatches);
+                    return;
+                } else if (choice.toUpperCase() === 'S') {
+                    currentIndex++;
+                    showNextUnmatched();
+                    return;
+                } else {
+                    const choiceNum = parseInt(choice);
+                    if (choiceNum >= 1 && choiceNum <= suggestions.length) {
+                        manualMatches.push({
+                            movimento: movimento,
+                            iscrizione: suggestions[choiceNum - 1].iscrizione,
+                            importoMovimento: importo,
+                            data: data,
+                            tipo: 'MATCH_MANUALE',
+                            similarity: suggestions[choiceNum - 1].similarity
+                        });
+                        console.log(`Match manuale: "${controparte}" → "${suggestions[choiceNum - 1].nomeCompleto}" (${(suggestions[choiceNum - 1].similarity * 100).toFixed(1)}%)`);
+                    }
+                }
+            } else {
+                message += `Nessuna corrispondenza simile trovata.\n\n`;
+                message += `S: Salta (metti in archivio)\n`;
+                message += `T: Termina controllo`;
+                
+                const choice = prompt(message);
+                
+                if (choice === null || choice.toUpperCase() === 'T') {
+                    resolve(manualMatches);
+                    return;
+                }
+            }
+            
+            currentIndex++;
+            showNextUnmatched();
+        }
+        
+        if (notMatched.length > 0) {
+            const conferma = confirm(
+                `CONTROLLO NOMI SIMILI\n\n` +
+                `Trovati ${notMatched.length} movimenti non matchati automaticamente.\n\n` +
+                `Vuoi controllare manualmente se ci sono nomi simili?\n` +
+                `(Es: "Sar Zen" potrebbe corrispondere a "Sara Zen")\n\n` +
+                `Clicca OK per iniziare il controllo manuale\n` +
+                `Clicca Annulla per saltare`
+            );
+            
+            if (conferma) {
+                showNextUnmatched();
+            } else {
+                resolve([]);
+            }
+        } else {
+            resolve([]);
+        }
+    });
 }
 
 // Calcolo rimborsi spese - NUOVA SCALA
@@ -247,7 +373,7 @@ function loadIscrizioni() {
             const resultDiv = document.getElementById('iscrizioniResult');
             resultDiv.innerHTML = `
                 <div class="success-box">
-                    ✅ File caricato con successo!<br>
+                    ✓ File caricato con successo!<br>
                     <strong>${iscrizioniData.length}</strong> artisti trovati
                 </div>
             `;
@@ -260,7 +386,7 @@ function loadIscrizioni() {
         } catch (error) {
             document.getElementById('iscrizioniResult').innerHTML = `
                 <div class="error-box">
-                    ❌ Errore nel caricamento: ${error.message}
+                    ✗ Errore nel caricamento: ${error.message}
                 </div>
             `;
         }
@@ -287,7 +413,7 @@ function loadMovimenti() {
             const resultDiv = document.getElementById('movimentiResult');
             resultDiv.innerHTML = `
                 <div class="success-box">
-                    ✅ File caricato con successo!<br>
+                    ✓ File caricato con successo!<br>
                     <strong>${movimentiData.length}</strong> movimenti trovati
                 </div>
             `;
@@ -299,7 +425,7 @@ function loadMovimenti() {
         } catch (error) {
             document.getElementById('movimentiResult').innerHTML = `
                 <div class="error-box">
-                    ❌ Errore nel caricamento: ${error.message}
+                    ✗ Errore nel caricamento: ${error.message}
                 </div>
             `;
         }
@@ -307,8 +433,8 @@ function loadMovimenti() {
     reader.readAsArrayBuffer(file);
 }
 
-// Matching principale - NUOVA LOGICA SEMPLIFICATA
-function performMatching() {
+// Matching principale - CON CONTROLLO NOMI SIMILI
+async function performMatching() {
     if (iscrizioniData.length === 0 || movimentiData.length === 0) {
         alert('Carica prima entrambi i file Excel!');
         return;
@@ -320,7 +446,7 @@ function performMatching() {
     movimentiIgnorati = [];
     accreditiDaControllare = [];
     
-    console.log('=== INIZIO MATCHING ===');
+    console.log('=== INIZIO MATCHING CON CONTROLLO NOMI SIMILI ===');
     console.log('Movimenti totali:', movimentiData.length);
     console.log('Iscrizioni totali:', iscrizioniData.length);
     
@@ -361,6 +487,8 @@ function performMatching() {
     console.log('Accrediti trovati:', accrediti.length);
     
     // STEP 2: Processa ADDEBITI - Solo se presente nelle iscrizioni E ha "prestazione occasionale"
+    let addebitiNonMatchati = [];
+    
     addebiti.forEach(addebito => {
         const persona = findPersonaByControparte(addebito.controparte, addebito.movimento, iscrizioniData);
         
@@ -391,21 +519,53 @@ function performMatching() {
                 console.log(`Movimento ignorato - Persona nelle iscrizioni ma senza "prestazione occasionale":`, addebito.controparte);
                 // Non aggiungere né ai matchati né ai non matchati - completamente ignorato
             } else {
-                // NON MATCHATO - Persona non presente nelle iscrizioni
-                movimentiNonMatchati.push({
+                // NON MATCHATO - Potrebbe avere nomi simili
+                addebitiNonMatchati.push({
                     movimento: addebito.movimento,
                     controparte: addebito.controparte,
                     importo: addebito.importo,
                     data: addebito.data,
                     tipo: 'ADDEBITO',
                     index: addebito.index,
-                    motivo: 'Persona non presente nelle iscrizioni'
+                    motivo: 'Persona non presente nelle iscrizioni (controllo nomi simili necessario)'
                 });
             }
         }
     });
     
-    // STEP 3: Processa ACCREDITI - Solo se presente nelle iscrizioni (sospetti)
+    console.log('Movimenti matchati automaticamente:', movimentiMatchati.length);
+    console.log('Addebiti non matchati (da controllare):', addebitiNonMatchati.length);
+    
+    // STEP 3: CONTROLLO MANUALE NOMI SIMILI
+    let matchManuali = [];
+    if (addebitiNonMatchati.length > 0) {
+        console.log('Avvio controllo manuale nomi simili...');
+        matchManuali = await showUnmatchedDialog(addebitiNonMatchati);
+        console.log('Match manuali ottenuti:', matchManuali.length);
+        
+        // Aggiungi i match manuali a quelli automatici
+        matchManuali.forEach(match => {
+            movimentiMatchati.push({
+                movimento: match.movimento,
+                persona: match.iscrizione,
+                controparte: findColumnValue(match.movimento, ['CONTROPARTE', 'Controparte', 'controparte', 'C']),
+                importoTotale: match.importoMovimento,
+                data: match.data,
+                tipo: 'MATCH_MANUALE',
+                similarity: match.similarity,
+                index: match.movimento.index || 0
+            });
+        });
+        
+        // Rimuovi dai non matchati quelli che sono stati matchati manualmente
+        const matchedMovements = new Set(matchManuali.map(m => m.movimento));
+        addebitiNonMatchati = addebitiNonMatchati.filter(addebito => !matchedMovements.has(addebito.movimento));
+    }
+    
+    // Gli addebiti rimasti vanno in archivio
+    movimentiNonMatchati = addebitiNonMatchati;
+    
+    // STEP 4: Processa ACCREDITI - Solo se presente nelle iscrizioni (sospetti)
     accrediti.forEach(accredito => {
         const persona = findPersonaByControparte(accredito.controparte, accredito.movimento, iscrizioniData);
         
@@ -425,39 +585,48 @@ function performMatching() {
         // Gli accrediti da persone NON nelle iscrizioni vengono completamente ignorati
     });
     
-    console.log('=== RISULTATI MATCHING ===');
-    console.log('Movimenti matchati (addebiti da iscritti):', movimentiMatchati.length);
-    console.log('Movimenti non matchati (addebiti da non iscritti):', movimentiNonMatchati.length);
-    console.log('Accrediti da controllare (da iscritti):', accreditiDaControllare.length);
+    console.log('=== RISULTATI MATCHING CON CONTROLLO NOMI SIMILI ===');
+    console.log('Movimenti matchati totali (auto + manuali):', movimentiMatchati.length);
+    console.log('- Match automatici:', movimentiMatchati.filter(m => m.tipo === 'ADDEBITO').length);
+    console.log('- Match manuali:', movimentiMatchati.filter(m => m.tipo === 'MATCH_MANUALE').length);
+    console.log('Movimenti non matchati (archivio):', movimentiNonMatchati.length);
+    console.log('Accrediti da controllare:', accreditiDaControllare.length);
     
     // Mostra i risultati
     showMatchingResults();
 }
 
-// Visualizzazione risultati semplificata CON RAGGRUPPAMENTO ARCHIVIO
+// Visualizzazione risultati con info sui match manuali
 function showMatchingResults() {
     const resultDiv = document.getElementById('matchingResult');
+    
+    const matchAutomatici = movimentiMatchati.filter(m => m.tipo === 'ADDEBITO').length;
+    const matchManuali = movimentiMatchati.filter(m => m.tipo === 'MATCH_MANUALE').length;
+    
     let html = `
         <div class="info-box">
-            <strong>📊 RISULTATI MATCHING:</strong><br>
-            ✅ Addebiti processabili (da persone nelle iscrizioni): <strong>${movimentiMatchati.length}</strong><br>
+            <strong>📊 RISULTATI MATCHING CON CONTROLLO NOMI SIMILI:</strong><br>
+            ✅ Match automatici: <strong>${matchAutomatici}</strong><br>
+            🔍 Match manuali (nomi simili): <strong>${matchManuali}</strong><br>
+            📝 Totale processabili: <strong>${movimentiMatchati.length}</strong><br>
             📁 Addebiti non matchati (archivio): <strong>${movimentiNonMatchati.length}</strong><br>
-            ⚠️ Accrediti da controllare (possibili rimborsi): <strong>${accreditiDaControllare.length}</strong>
+            ⚠️ Accrediti da controllare: <strong>${accreditiDaControllare.length}</strong>
         </div>
     `;
     
-    // SEZIONE 1: MOVIMENTI PROCESSABILI (Addebiti matchati)
+    // SEZIONE 1: MOVIMENTI PROCESSABILI (Addebiti matchati + manuali)
     if (movimentiMatchati.length > 0) {
         html += `
             <h3 style="color: #155724; background: #d4edda; padding: 10px; border-radius: 5px; margin-top: 20px;">
                 ✅ Movimenti Processabili (${movimentiMatchati.length})
             </h3>
-            <p>Questi addebiti genereranno ricevute:</p>
+            <p>Questi addebiti genereranno ricevute (inclusi i match manuali per nomi simili):</p>
             <table>
                 <thead>
                     <tr>
                         <th>Controparte</th>
-                        <th>Importo Totale<br>(con rimborsi)</th>
+                        <th>Match</th>
+                        <th>Importo Totale</th>
                         <th>Importo Netto</th>
                         <th>Rimborso Spese</th>
                         <th>Data</th>
@@ -476,9 +645,16 @@ function showMatchingResults() {
             totaleImportiProcessabili += match.importoTotale;
             totaleRimborsiProcessabili += rimborso;
             
+            const matchType = match.tipo === 'MATCH_MANUALE' ? 
+                `🔍 Manuale (${(match.similarity * 100).toFixed(1)}%)` : 
+                '✅ Automatico';
+                
+            const rowColor = match.tipo === 'MATCH_MANUALE' ? '#fff3cd' : '#d4edda';
+            
             html += `
-                <tr style="background-color: #d4edda;">
+                <tr style="background-color: ${rowColor};">
                     <td><strong>${match.controparte}</strong></td>
+                    <td>${matchType}</td>
                     <td><strong>€ ${match.importoTotale.toFixed(2)}</strong></td>
                     <td>€ ${netto.toFixed(2)}</td>
                     <td>€ ${rimborso.toFixed(2)}</td>
@@ -491,7 +667,7 @@ function showMatchingResults() {
                 </tbody>
                 <tfoot style="background-color: #155724; color: white;">
                     <tr>
-                        <td><strong>TOTALI</strong></td>
+                        <td colspan="2"><strong>TOTALI</strong></td>
                         <td><strong>€ ${totaleImportiProcessabili.toFixed(2)}</strong></td>
                         <td><strong>€ ${(totaleImportiProcessabili - totaleRimborsiProcessabili).toFixed(2)}</strong></td>
                         <td><strong>€ ${totaleRimborsiProcessabili.toFixed(2)}</strong></td>
@@ -500,6 +676,15 @@ function showMatchingResults() {
                 </tfoot>
             </table>
         `;
+        
+        if (matchManuali > 0) {
+            html += `
+                <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                    <strong>🔍 Controllo nomi simili completato:</strong> ${matchManuali} corrispondenze trovate manualmente.<br>
+                    Esempi: "Sar Zen" → "Sara Zen", nomi con piccole differenze ortografiche.
+                </div>
+            `;
+        }
     }
     
     // SEZIONE 2: DA CONTROLLARE (Accrediti + Addebiti dello stesso CF)
@@ -550,9 +735,6 @@ function showMatchingResults() {
         html += `
                 </tbody>
             </table>
-            <div style="background: #ffeaa7; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                <strong>💡 Azione richiesta:</strong> Verifica se gli addebiti corrispondenti sono legittimi o dovrebbero essere rimossi per evitare duplicazioni.
-            </div>
         `;
     }
     
@@ -591,21 +773,9 @@ function showMatchingResults() {
         
         html += `
             <h3 style="color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px; margin-top: 20px;">
-                📁 Archivio Non Matchati - Raggruppati per Controparte (${archivioOrdinato.length} controparti diverse)
+                📁 Archivio Non Matchati - ${archivioOrdinato.length} controparti diverse
             </h3>
-            <p>Addebiti verso persone NON presenti nelle iscrizioni, raggruppati e sommati per controparte:</p>
-            
-            <div style="margin-bottom: 15px;">
-                <button onclick="showArchiveControls(true)" style="background: #28a745; margin-right: 10px;">
-                    Mostra Dettagli Archivio
-                </button>
-                <button onclick="createReceiptFromArchive()" style="background: #17a2b8; margin-right: 10px;">
-                    Crea Ricevuta da Archivio
-                </button>
-                <button onclick="deleteFromArchive()" style="background: #dc3545;">
-                    Elimina Selezionati
-                </button>
-            </div>
+            <p>Addebiti non trovati nelle iscrizioni nemmeno con controllo nomi simili:</p>
             
             <table>
                 <thead>
@@ -624,7 +794,7 @@ function showMatchingResults() {
             const importoMedio = gruppo.importoTotale / gruppo.numeroMovimenti;
             
             html += `
-                <tr id="archive_group_${index}">
+                <tr>
                     <td>
                         <strong>${gruppo.controparte}</strong>
                         <br><small style="color: #666;">Primo: ${gruppo.movimenti[0].data.toLocaleDateString('it-IT')} - 
@@ -643,11 +813,6 @@ function showMatchingResults() {
                         <button onclick="showGroupDetails(${index})" 
                                 style="background: #007bff; font-size: 11px; padding: 4px 8px; margin: 2px;">
                             Dettagli
-                        </button>
-                        <br>
-                        <button onclick="createGroupReceipt(${index})" 
-                                style="background: #28a745; font-size: 11px; padding: 4px 8px; margin: 2px;">
-                            Crea Ricevuta
                         </button>
                     </td>
                 </tr>
@@ -671,16 +836,10 @@ function showMatchingResults() {
                         <td><strong>TOTALI ARCHIVIO</strong></td>
                         <td style="text-align: center;"><strong>${movimentiNonMatchati.length}</strong></td>
                         <td style="text-align: right;"><strong>€ ${totaleArchivio.toFixed(2)}</strong></td>
-                        <td>-</td>
-                        <td>-</td>
+                        <td colspan="2">-</td>
                     </tr>
                 </tfoot>
             </table>
-            
-            <div style="background: #d1ecf1; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                <strong>ℹ️ Informazioni:</strong> Questi movimenti sono raggruppati per controparte e non genereranno ricevute automaticamente 
-                poiché le controparti non sono presenti nel file iscrizioni o non hanno "prestazione occasionale" nella descrizione.
-            </div>
         `;
         
         // Conserva i dati raggruppati per le funzioni JavaScript
@@ -692,7 +851,7 @@ function showMatchingResults() {
         html += `
             <div style="text-align: center; margin: 30px 0; padding: 20px; background: #e8f5e9; border-radius: 10px;">
                 <h4 style="color: #155724;">🚀 Pronto per Generare le Ricevute!</h4>
-                <p>Trovati <strong>${movimentiMatchati.length}</strong> movimenti processabili.</p>
+                <p>Trovati <strong>${movimentiMatchati.length}</strong> movimenti processabili (${matchAutomatici} automatici + ${matchManuali} manuali).</p>
                 <button onclick="proceedToGeneration()" 
                         style="background: #28a745; font-size: 18px; padding: 15px 30px; border-radius: 8px;">
                     Procedi alla Generazione Ricevute
@@ -704,49 +863,7 @@ function showMatchingResults() {
     resultDiv.innerHTML = html;
 }
 
-// Controlli archivio
-function showArchiveControls(show) {
-    const archiveSection = document.getElementById('archiveSection');
-    if (archiveSection) {
-        archiveSection.style.display = show ? 'block' : 'none';
-    }
-}
-
-function createReceiptFromArchive() {
-    alert('Funzionalità in sviluppo: Creazione ricevuta da archivio');
-}
-
-function deleteFromArchive() {
-    const checkboxes = document.querySelectorAll('input[id^="arch_"]:checked');
-    if (checkboxes.length === 0) {
-        alert('Seleziona almeno un movimento da eliminare');
-        return;
-    }
-    
-    if (confirm(`Eliminare ${checkboxes.length} movimenti dall'archivio?`)) {
-        checkboxes.forEach(checkbox => {
-            const index = checkbox.id.replace('arch_', '');
-            const row = document.getElementById(`archive_${index}`);
-            if (row) row.remove();
-        });
-        alert(`${checkboxes.length} movimenti eliminati dall'archivio`);
-    }
-}
-
-function createSingleReceipt(index) {
-    const movimento = movimentiNonMatchati[index];
-    if (movimento) {
-        alert(`Creazione ricevuta singola per: ${movimento.controparte}\nImporto: €${movimento.importo.toFixed(2)}\n(Funzionalità in sviluppo)`);
-    }
-}
-
-function createGroupReceipt(index) {
-    const gruppo = window.archivioRaggruppato[index];
-    if (gruppo) {
-        alert(`Creazione ricevuta per gruppo: ${gruppo.controparte}\n${gruppo.numeroMovimenti} movimenti\nTotale: €${gruppo.importoTotale.toFixed(2)}\n\n(Funzionalità in sviluppo)`);
-    }
-}
-
+// Funzioni di gestione archivio (già presenti)
 function showGroupDetails(index) {
     const detailRow = document.getElementById(`details_${index}`);
     if (detailRow) {
@@ -758,7 +875,7 @@ function showGroupDetails(index) {
     }
 }
 
-// Procedi alla generazione - NUOVA LOGICA SEMPLIFICATA
+// Procedi alla generazione - identica alla versione precedente
 function proceedToGeneration() {
     if (movimentiMatchati.length === 0) {
         alert('Nessun movimento processabile trovato!');
@@ -790,7 +907,7 @@ function proceedToGeneration() {
     });
     
     // Genera results per ricevute
-    results = [];
+    results.length = 0;
     
     Object.values(gruppiPerPersonaMese).forEach(gruppo => {
         const rimborsoSpese = calculateRimborsoSpese(gruppo.importoTotale);
@@ -823,40 +940,28 @@ function proceedToGeneration() {
         });
     });
     
-    console.log('Results generati:', results.length);
+    console.log('Results generati con controllo nomi simili:', results.length);
     
     // Abilita generazione ricevute
     document.getElementById('generateBtn').disabled = false;
     
-    alert(`✅ Elaborazione completata!\n\nSaranno generate ${results.length} ricevute (raggruppate per mese).\n\nOra puoi cliccare su "Genera Ricevute" per creare i documenti HTML.`);
+    const matchAutomatici = movimentiMatchati.filter(m => m.tipo === 'ADDEBITO').length;
+    const matchManuali = movimentiMatchati.filter(m => m.tipo === 'MATCH_MANUALE').length;
+    
+    alert(`✅ Elaborazione completata con controllo nomi simili!\n\nSaranno generate ${results.length} ricevute (raggruppate per mese).\n\nMatch trovati:\n• ${matchAutomatici} automatici\n• ${matchManuali} manuali (nomi simili)\n\nOra puoi cliccare su "Genera Ricevute" per creare i documenti HTML.`);
 }
 
-// Esposizione IMMEDIATA funzioni al contesto globale
+// Esposizione funzioni al contesto globale
 window.loadIscrizioni = loadIscrizioni;
 window.loadMovimenti = loadMovimenti;
 window.performMatching = performMatching;
-window.showArchiveControls = showArchiveControls;
-window.createReceiptFromArchive = createReceiptFromArchive;
-window.deleteFromArchive = deleteFromArchive;
-window.createSingleReceipt = createSingleReceipt;
-window.proceedToGeneration = proceedToGeneration;
 window.showGroupDetails = showGroupDetails;
-window.createGroupReceipt = createGroupReceipt;
+window.proceedToGeneration = proceedToGeneration;
 
-// Debug IMMEDIATO - verifica che le funzioni siano esposte
-console.log('🔍 matching.js CARICATO - Verifico esposizione funzioni...');
-console.log('loadIscrizioni:', typeof window.loadIscrizioni);
-console.log('loadMovimenti:', typeof window.loadMovimenti);
-console.log('performMatching:', typeof window.performMatching);
-
-if (typeof window.loadIscrizioni !== 'function') {
-    console.error('❌ ERRORE: loadIscrizioni non è esposta correttamente!');
-} else {
-    console.log('✅ loadIscrizioni esposta correttamente');
-}
-
-if (typeof window.performMatching !== 'function') {
-    console.error('❌ ERRORE: performMatching non è esposta correttamente!');
-} else {
-    console.log('✅ performMatching esposta correttamente');
-}
+console.log('🔍 matching.js CARICATO - Sistema controllo nomi simili implementato');
+console.log('Funzioni esposte:', {
+    loadIscrizioni: typeof window.loadIscrizioni,
+    performMatching: typeof window.performMatching,
+    calculateSimilarity: typeof calculateSimilarity,
+    findSimilarMatches: typeof findSimilarMatches
+});
