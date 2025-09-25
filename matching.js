@@ -716,7 +716,7 @@ function proceedToGeneration() {
     alert(`✅ Elaborazione completata!\n\nSaranno generate ${results.length} ricevute (raggruppate per mese).\n\nOra puoi cliccare su "Genera Ricevute" per creare i documenti HTML.`);
 }
 
-// Esposizione funzioni al contesto globale
+// Esposizione IMMEDIATA funzioni al contesto globale
 window.loadIscrizioni = loadIscrizioni;
 window.loadMovimenti = loadMovimenti;
 window.performMatching = performMatching;
@@ -725,3 +725,21 @@ window.createReceiptFromArchive = createReceiptFromArchive;
 window.deleteFromArchive = deleteFromArchive;
 window.createSingleReceipt = createSingleReceipt;
 window.proceedToGeneration = proceedToGeneration;
+
+// Debug IMMEDIATO - verifica che le funzioni siano esposte
+console.log('🔍 matching.js CARICATO - Verifico esposizione funzioni...');
+console.log('loadIscrizioni:', typeof window.loadIscrizioni);
+console.log('loadMovimenti:', typeof window.loadMovimenti);
+console.log('performMatching:', typeof window.performMatching);
+
+if (typeof window.loadIscrizioni !== 'function') {
+    console.error('❌ ERRORE: loadIscrizioni non è esposta correttamente!');
+} else {
+    console.log('✅ loadIscrizioni esposta correttamente');
+}
+
+if (typeof window.performMatching !== 'function') {
+    console.error('❌ ERRORE: performMatching non è esposta correttamente!');
+} else {
+    console.log('✅ performMatching esposta correttamente');
+}
