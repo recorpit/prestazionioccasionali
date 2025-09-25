@@ -1,10 +1,10 @@
-// Variabili globali per gestione matching
+// Variabili locali per gestione matching (results è già dichiarato in utils.js)
 let allMovimentiProcessati = [];
 let movimentiMatchati = [];
 let movimentiNonMatchati = [];
 let movimentiIgnorati = [];
 let accreditiDaControllare = [];
-let results = [];
+// results è già dichiarato in utils.js come variabile globale
 
 // Normalizzazione stringhe
 function normalizeString(str) {
