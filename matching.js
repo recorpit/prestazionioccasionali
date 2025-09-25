@@ -733,6 +733,13 @@ function deleteFromArchive() {
     }
 }
 
+function createSingleReceipt(index) {
+    const movimento = movimentiNonMatchati[index];
+    if (movimento) {
+        alert(`Creazione ricevuta singola per: ${movimento.controparte}\nImporto: €${movimento.importo.toFixed(2)}\n(Funzionalità in sviluppo)`);
+    }
+}
+
 function createGroupReceipt(index) {
     const gruppo = window.archivioRaggruppato[index];
     if (gruppo) {
