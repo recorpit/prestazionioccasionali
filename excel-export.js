@@ -229,7 +229,7 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
 }
 
 // Esporta tutti i mesi separatamente
-async function exportAllMonthsExcel(ricevutePerMese, totaleRimborsi, risparmioFiscale) {
+function exportAllMonthsExcel(ricevutePerMese, totaleRimborsi, risparmioFiscale) {
     const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
                      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
     
@@ -266,7 +266,7 @@ async function exportAllMonthsExcel(ricevutePerMese, totaleRimborsi, risparmioFi
         
         // Pausa tra i download per non sovraccaricare il browser
         if (filesCreated < Object.keys(ricevutePerMese).length) {
-            await new Promise(resolve => setTimeout(resolve, 300));
+            setTimeout(() => {}, 300); // Pausa sincrona
         }
     }
     
