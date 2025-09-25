@@ -1,6 +1,6 @@
-// Export Excel singolo - COMPLETO
+// Export Excel singolo - CON MODIFICHE DEL COMMERCIALISTA
 function exportToExcel() {
-    console.log('Inizio export Excel singolo...');
+    console.log('Inizio export Excel singolo con modifiche commercialista...');
     
     if (!results || results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -21,30 +21,19 @@ function exportToExcel() {
         const conferma = confirm(
             `EXPORT EXCEL - RIEPILOGO RIMBORSI SPESE\n\n` +
             `• Ricevute da esportare: ${results.length}\n` +
-            `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
-            `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+            `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2).replace('.', ',')}\n` +
+            `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2).replace('.', ',')}\n\n` +
             `Procedere con l'export Excel?`
         );
         
         if (!conferma) return;
 
-        console.log(`Esportando ${results.length} ricevute in Excel...`);
+        console.log(`Esportando ${results.length} ricevute in Excel con numerazione unificata e modifiche commercialista...`);
 
-        // ORDINAMENTO CRUCIALE: Ordina i results per data prima dell'export
-        const resultsOrdinati = [...results].sort((a, b) => {
-            if (a.anno !== b.anno) {
-                return a.anno - b.anno;
-            }
-            return a.mese - b.mese;
-        });
-        
-        console.log('Export Excel - Results ordinati per data:', 
-            resultsOrdinati.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome}`));
-
-        // Prepara dati Excel con intestazione a 28 colonne
+        // Prepara dati Excel con intestazione a 32 colonne (30 + 2 conti)
         const excelData = [];
         
-        // Intestazione - 28 colonne come richiesto
+        // Intestazione - 32 colonne totali
         excelData.push([
             'Id Paese',              // 1
             'Partita Iva',           // 2
@@ -70,21 +59,23 @@ function exportToExcel() {
             'Natura IVA1',           // 22
             'Codice IVA1',           // 23
             'Imposta1',              // 24
-            'Totale Imponibile',     // 25
-            'Totale Imposta',        // 26
-            'Totale Documento',      // 27
-            'Esigibilita\' IVA'      // 28
+            'Totale Imponibile1',    // 25 (AA) - RIMBORSI
+            'Totale Imposta1',       // 26 (AB) - SEMPRE 0
+            'Totale Imponibile',     // 27 (AC) - COMPENSO
+            'Totale Imposta',        // 28 (AD) - SEMPRE 0
+            'Totale Documento',      // 29 (AE) - COMPENSO + RIMBORSI
+            'Esigibilita\' IVA',     // 30 (AF)
+            'Conto',                 // 31 (AG) - 816000
+            'Conto1'                 // 32 (AH) - 809230
         ]);
 
-        // CORREZIONE NUMERAZIONE PROGRESSIVA PER EXCEL
-        // Crea una mappa temporanea per numerazione corretta nell'ordine cronologico
-        const numeroTemporaneoPerCF = {};
-        
-        // Elabora ogni ricevuta NELL'ORDINE CORRETTO per ricostruire numerazione
-        resultsOrdinati.forEach((person, index) => {
+        // Elabora ogni ricevuta USANDO LA NUMERAZIONE UNIFICATA
+        results.forEach((person, index) => {
             try {
-                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
-                const receiptNumber = getCurrentReceiptNumber(cfKey);
+                // USA IL NUMERO PROGRESSIVO UNIFICATO
+                const numeroRicevuta = person.numeroProgressivo;
+                
+                console.log(`Excel: ${person.nome} ${person.cognome} - ${person.mese}/${person.anno} → Numero: ${numeroRicevuta}`);
                 
                 // Data ricevuta = ultimo giorno del mese del pagamento
                 const lastDayOfMonth = new Date(person.anno, person.mese, 0);
@@ -101,7 +92,6 @@ function exportToExcel() {
                     const parts = indirizzoCompleto.trim().split(/\s+/);
                     if (parts.length > 0) {
                         const lastPart = parts[parts.length - 1];
-                        // Se l'ultima parte sembra un numero civico (numero + eventuale lettera)
                         if (/^\d+[a-zA-Z]?$/.test(lastPart)) {
                             numCivico = lastPart;
                             indirizzo = parts.slice(0, -1).join(' ');
@@ -111,10 +101,20 @@ function exportToExcel() {
                     }
                 }
 
-                // Riga dati - 28 colonne
+                // CALCOLI SECONDO LE SPECIFICHE DEL COMMERCIALISTA
+                const compensoLordo = person.compenso || 0;
+                const rimborsiSpese = person.rimborsoSpese || 0;
+                const totaleDocumento = compensoLordo + rimborsiSpese;
+                
+                // Formattazione numeri con VIRGOLA (non punto)
+                const compensoStr = compensoLordo.toFixed(2).replace('.', ',');
+                const rimborsiStr = rimborsiSpese.toFixed(2).replace('.', ',');
+                const totaleStr = totaleDocumento.toFixed(2).replace('.', ',');
+
+                // Riga dati - 32 colonne
                 const rowData = [
                     'IT',                           // 1 - Id Paese
-                    person.partitaIva || '',        // 2 - Partita IVA (dalla colonna M iscrizioni)
+                    person.partitaIva || '',        // 2 - Partita IVA
                     person.codiceFiscale || '',     // 3 - Codice Fiscale
                     denominazione,                  // 4 - Denominazione
                     person.cognome || '',           // 5 - Cognome
@@ -124,39 +124,43 @@ function exportToExcel() {
                     person.cap || '',               // 9 - CAP
                     person.citta || '',             // 10 - Comune
                     person.provincia || '',         // 11 - Provincia
-                    '135',                          // 12 - Causale (135 per prestazioni occasionali)
+                    '104',                          // 12 - Causale (CAMBIATA DA 135 A 104)
                     '4',                            // 13 - Sezionale
-                    'TD01',                         // 14 - Tipo Doc. (TD01 corretto per fatture)
+                    'TD01',                         // 14 - Tipo Doc.
                     dataDoc,                        // 15 - Data Documento
-                    receiptNumber.toString(),       // 16 - Numero Documento
+                    numeroRicevuta.toString(),      // 16 - NUMERO PROGRESSIVO UNIFICATO
                     dataDoc,                        // 17 - Data doc. fattura origine
                     '1',                            // 18 - Num. doc. fattura origine
                     'COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE', // 19 - Descrizione
-                    person.compenso.toFixed(2),     // 20 - Imponibile1
-                    '0',                            // 21 - Aliquota IVA1 (0% per occasionali)
-                    'N2',                           // 22 - Natura IVA1 (N2 = non soggetta)
-                    'NI',                           // 23 - Codice IVA1 (NI = non imponibile)
-                    '0',                            // 24 - Imposta1 (0 per occasionali)
-                    person.compenso.toFixed(2),     // 25 - Totale Imponibile
-                    '0',                            // 26 - Totale Imposta
-                    person.compenso.toFixed(2),     // 27 - Totale Documento
-                    'I'                             // 28 - Esigibilità IVA (I = immediata)
+                    compensoStr,                    // 20 - Imponibile1 (compenso con virgola)
+                    '0',                            // 21 - Aliquota IVA1
+                    'N2',                           // 22 - Natura IVA1
+                    'NI',                           // 23 - Codice IVA1
+                    '0',                            // 24 - Imposta1
+                    rimborsiStr,                    // 25 (AA) - Totale Imponibile1 (RIMBORSI)
+                    '0',                            // 26 (AB) - Totale Imposta1 (SEMPRE 0)
+                    compensoStr,                    // 27 (AC) - Totale Imponibile (COMPENSO)
+                    '0',                            // 28 (AD) - Totale Imposta (SEMPRE 0)
+                    totaleStr,                      // 29 (AE) - Totale Documento (COMPENSO + RIMBORSI)
+                    'I',                            // 30 (AF) - Esigibilità IVA
+                    '816000',                       // 31 (AG) - Conto (FISSO)
+                    '809230'                        // 32 (AH) - Conto1 (FISSO)
                 ];
                 
                 excelData.push(rowData);
-                console.log(`Riga Excel creata per: ${denominazione}`);
+                
+                console.log(`Excel row: ${denominazione} - Compenso: ${compensoStr}, Rimborsi: ${rimborsiStr}, Totale: ${totaleStr}`);
                 
             } catch (error) {
                 console.error(`Errore elaborando ricevuta ${index}:`, error);
-                // Continua con la prossima ricevuta invece di fermarsi
             }
         });
 
         // Crea e scarica il file Excel
-        console.log('Creazione file Excel...');
+        console.log('Creazione file Excel con 32 colonne...');
         const ws = XLSX.utils.aoa_to_sheet(excelData);
         
-        // Imposta larghezza colonne per leggibilità
+        // Imposta larghezza colonne per leggibilità (32 colonne)
         const colWidths = [
             {wch: 5},   // Id Paese
             {wch: 15},  // Partita IVA
@@ -182,10 +186,14 @@ function exportToExcel() {
             {wch: 8},   // Natura IVA1
             {wch: 8},   // Codice IVA1
             {wch: 8},   // Imposta1
-            {wch: 12},  // Totale Imponibile
-            {wch: 12},  // Totale Imposta
+            {wch: 12},  // Totale Imponibile1 (rimborsi)
+            {wch: 8},   // Totale Imposta1
+            {wch: 12},  // Totale Imponibile (compenso)
+            {wch: 8},   // Totale Imposta
             {wch: 12},  // Totale Documento
-            {wch: 8}    // Esigibilità IVA
+            {wch: 8},   // Esigibilità IVA
+            {wch: 10},  // Conto
+            {wch: 10}   // Conto1
         ];
         ws['!cols'] = colWidths;
 
@@ -200,7 +208,7 @@ function exportToExcel() {
         
         // Messaggio di successo
         setTimeout(() => {
-            alert(`✅ Export Excel completato!\n\nFile: ${fileName}\n\n📊 Statistiche:\n• Ricevute: ${results.length}\n• Rimborsi spese: €${totaleRimborsi.toFixed(2)}\n• Risparmio fiscale: €${risparmioFiscale.toFixed(2)}`);
+            alert(`✅ Export Excel completato con modifiche del commercialista!\n\nFile: ${fileName}\n\n📊 Statistiche:\n• Ricevute: ${results.length}\n• Compensi: €${results.reduce((s,p) => s + p.compenso, 0).toFixed(2).replace('.', ',')}\n• Rimborsi spese: €${totaleRimborsi.toFixed(2).replace('.', ',')}\n• Risparmio fiscale: €${risparmioFiscale.toFixed(2).replace('.', ',')}\n\n🔧 Modifiche applicate:\n• Causale 104 (era 135)\n• Separazione compensi/rimborsi\n• Formato virgola italiana\n• Conti bilancio aggiunti`);
         }, 500);
         
     } catch (error) {
@@ -209,9 +217,9 @@ function exportToExcel() {
     }
 }
 
-// Export Excel diviso per mese - COMPLETO
+// Export Excel diviso per mese - CON MODIFICHE DEL COMMERCIALISTA
 function exportToExcelByMonth() {
-    console.log('Inizio export Excel per mese...');
+    console.log('Inizio export Excel per mese con modifiche commercialista...');
     
     if (!results || results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -232,26 +240,19 @@ function exportToExcelByMonth() {
         const conferma = confirm(
             `EXPORT EXCEL PER MESE - RIEPILOGO RIMBORSI\n\n` +
             `• Ricevute da esportare: ${results.length}\n` +
-            `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
-            `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
+            `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2).replace('.', ',')}\n` +
+            `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2).replace('.', ',')}\n\n` +
             `Verranno creati file Excel separati per ogni mese.\nProcedere?`
         );
         
         if (!conferma) return;
 
-        // Raggruppa le ricevute per mese CON ORDINAMENTO
+        console.log('Raggruppamento ricevute per mese con numerazione unificata e modifiche commercialista...');
+
+        // Raggruppa le ricevute per mese
         const ricevutePerMese = {};
         
-        // Prima ordina tutti i results per data
-        const resultsOrdinatiPerMese = [...results].sort((a, b) => {
-            if (a.anno !== b.anno) {
-                return a.anno - b.anno;
-            }
-            return a.mese - b.mese;
-        });
-        
-        resultsOrdinatiPerMese.forEach(person => {
-            // Crea chiave mese nel formato YYYY-MM
+        results.forEach(person => {
             const chiaveMese = `${person.anno}-${person.mese.toString().padStart(2, '0')}`;
             if (!ricevutePerMese[chiaveMese]) {
                 ricevutePerMese[chiaveMese] = [];
@@ -280,32 +281,30 @@ function exportToExcelByMonth() {
 
                 const excelData = [];
                 
-                // NUMERAZIONE TEMPORANEA PER QUESTO MESE (nell'ordine cronologico)
-                const numeroTemporaneoPerCF = {};
-                
-                // Ordina le ricevute di questo mese per CF per mantenere coerenza numerica
-                const ricevuteMeseOrdinate = ricevuteMese.sort((a, b) => {
-                    const cfA = a.codiceFiscale || `${a.nome}_${a.cognome}`;
-                    const cfB = b.codiceFiscale || `${b.nome}_${b.cognome}`;
-                    return cfA.localeCompare(cfB);
-                });
-                
-                // Intestazione - 28 colonne identica al singolo
+                // Intestazione - 32 colonne identica al singolo
                 excelData.push([
                     'Id Paese', 'Partita Iva', 'Codice Fiscale', 'Denominazione', 'Cognome', 'Nome',
                     'Indirizzo', 'Num. civico', 'CAP', 'Comune', 'Provincia', 'Causale', 'Sezionale',
                     'Tipo Doc.', 'Data Doc.', 'Numero Doc.', 'Data doc. fattura origine', 'Num. doc. fattura origine',
                     'Descr. Articolo1', 'Imponibile1', 'Aliquota IVA1', 'Natura IVA1', 'Codice IVA1',
-                    'Imposta1', 'Totale Imponibile', 'Totale Imposta', 'Totale Documento', 'Esigibilita\' IVA'
+                    'Imposta1', 'Totale Imponibile1', 'Totale Imposta1', 'Totale Imponibile', 'Totale Imposta', 
+                    'Totale Documento', 'Esigibilita\' IVA', 'Conto', 'Conto1'
                 ]);
 
-                // Dati per questo mese
-                ricevuteMese.forEach(person => {
+                // Ordina le ricevute di questo mese per CF
+                const ricevuteMeseOrdinate = ricevuteMese.sort((a, b) => {
+                    const cfA = a.codiceFiscale || `${a.nome}_${a.cognome}`;
+                    const cfB = b.codiceFiscale || `${b.nome}_${b.cognome}`;
+                    return cfA.localeCompare(cfB);
+                });
+
+                // Dati per questo mese - CON MODIFICHE COMMERCIALISTA
+                ricevuteMeseOrdinate.forEach(person => {
                     try {
-                        const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
-                        const receiptNumber = getCurrentReceiptNumber(cfKey);
+                        const numeroRicevuta = person.numeroProgressivo;
                         
-                        // Data ricevuta = ultimo giorno del mese del pagamento
+                        console.log(`Excel mese: ${person.nome} ${person.cognome} - ${person.mese}/${person.anno} → Numero: ${numeroRicevuta}`);
+                        
                         const lastDayOfMonth = new Date(person.anno, person.mese, 0);
                         const dataDoc = lastDayOfMonth.toLocaleDateString('it-IT');
                         
@@ -329,15 +328,32 @@ function exportToExcelByMonth() {
                             }
                         }
 
-                        // Riga dati - 28 colonne
+                        // CALCOLI CON MODIFICHE COMMERCIALISTA
+                        const compensoLordo = person.compenso || 0;
+                        const rimborsiSpese = person.rimborsoSpese || 0;
+                        const totaleDocumento = compensoLordo + rimborsiSpese;
+                        
+                        // Formato con virgola
+                        const compensoStr = compensoLordo.toFixed(2).replace('.', ',');
+                        const rimborsiStr = rimborsiSpese.toFixed(2).replace('.', ',');
+                        const totaleStr = totaleDocumento.toFixed(2).replace('.', ',');
+
+                        // Riga dati - 32 colonne
                         excelData.push([
                             'IT', person.partitaIva || '', person.codiceFiscale || '', denominazione,
                             person.cognome || '', person.nome || '', indirizzo, numCivico,
-                            person.cap || '', person.citta || '', person.provincia || '', '135', '4',
-                            'TD01', dataDoc, receiptNumber.toString(), dataDoc, '1',
+                            person.cap || '', person.citta || '', person.provincia || '', '104', '4',
+                            'TD01', dataDoc, numeroRicevuta.toString(), dataDoc, '1',
                             'COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE',
-                            person.compenso.toFixed(2), '0', 'N2', 'NI', '0',
-                            person.compenso.toFixed(2), '0', person.compenso.toFixed(2), 'I'
+                            compensoStr, '0', 'N2', 'NI', '0',
+                            rimborsiStr,        // Totale Imponibile1 (rimborsi)
+                            '0',                // Totale Imposta1
+                            compensoStr,        // Totale Imponibile (compenso)
+                            '0',                // Totale Imposta
+                            totaleStr,          // Totale Documento (compenso + rimborsi)
+                            'I',                // Esigibilità IVA
+                            '816000',           // Conto
+                            '809230'            // Conto1
                         ]);
                         
                         totalExportedReceipts++;
@@ -350,13 +366,13 @@ function exportToExcelByMonth() {
                 // Crea e scarica il file Excel per questo mese
                 const ws = XLSX.utils.aoa_to_sheet(excelData);
                 
-                // Larghezza colonne
+                // Larghezza colonne (32 colonne)
                 const colWidths = [
                     {wch: 5}, {wch: 15}, {wch: 16}, {wch: 30}, {wch: 20}, {wch: 20},
                     {wch: 30}, {wch: 8}, {wch: 8}, {wch: 25}, {wch: 8}, {wch: 8}, {wch: 8},
                     {wch: 8}, {wch: 12}, {wch: 10}, {wch: 12}, {wch: 10}, {wch: 50},
                     {wch: 12}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 12},
-                    {wch: 12}, {wch: 12}, {wch: 8}
+                    {wch: 8}, {wch: 12}, {wch: 8}, {wch: 12}, {wch: 8}, {wch: 10}, {wch: 10}
                 ];
                 ws['!cols'] = colWidths;
 
@@ -369,7 +385,6 @@ function exportToExcelByMonth() {
                 XLSX.writeFile(wb, fileName);
                 filesCreated++;
                 
-                // Pausa piccola tra i download per evitare problemi browser
                 if (filesCreated < mesiOrdinati.length) {
                     setTimeout(() => {}, 200);
                 }
@@ -381,11 +396,16 @@ function exportToExcelByMonth() {
 
         // Messaggio finale di successo
         setTimeout(() => {
-            const message = `✅ Export Excel per mese completato!\n\n` +
+            const totalCompensi = results.reduce((s,p) => s + p.compenso, 0);
+            const message = `✅ Export Excel per mese completato con modifiche commercialista!\n\n` +
                           `📁 File generati: ${filesCreated}\n` +
                           `📄 Ricevute esportate: ${totalExportedReceipts}\n` +
-                          `💰 Rimborsi spese totali: €${totaleRimborsi.toFixed(2)}\n` +
-                          `🎯 Risparmio fiscale: €${risparmioFiscale.toFixed(2)}\n\n` +
+                          `💼 Compensi totali: €${totalCompensi.toFixed(2).replace('.', ',')}\n` +
+                          `💰 Rimborsi spese totali: €${totaleRimborsi.toFixed(2).replace('.', ',')}\n` +
+                          `🎯 Risparmio fiscale: €${risparmioFiscale.toFixed(2).replace('.', ',')}\n\n` +
+                          `🔧 Modifiche commercialista applicate:\n` +
+                          `• Causale 104 • Separazione compensi/rimborsi\n` +
+                          `• Virgola italiana • Conti bilancio\n` +
                           `I file sono stati scaricati automaticamente.`;
             alert(message);
         }, 1000);
@@ -403,32 +423,55 @@ function validateExportData() {
     }
     
     let invalidRecords = 0;
+    let missingNumbers = 0;
+    let zeroAmounts = 0;
+    
     results.forEach((person, index) => {
         if (!person.nome || !person.cognome || !person.compenso) {
             console.warn(`Record ${index} incompleto:`, person);
             invalidRecords++;
         }
+        
+        if (!person.numeroProgressivo) {
+            console.warn(`Record ${index} senza numero progressivo:`, person);
+            missingNumbers++;
+        }
+        
+        if (person.compenso === 0 && person.rimborsoSpese === 0) {
+            console.warn(`Record ${index} con importi zero:`, person);
+            zeroAmounts++;
+        }
     });
     
-    if (invalidRecords > 0) {
+    if (invalidRecords > 0 || missingNumbers > 0) {
         return { 
             valid: false, 
-            message: `${invalidRecords} record incompleti trovati. Controlla i dati.` 
+            message: `${invalidRecords} record incompleti, ${missingNumbers} senza numerazione, ${zeroAmounts} con importi zero. Rigenera le ricevute.` 
         };
     }
     
-    return { valid: true, message: 'Dati validi per export' };
+    return { valid: true, message: 'Dati validi per export con modifiche commercialista' };
 }
 
 // Utility per debug export
 function debugExportData() {
-    console.log('=== DEBUG EXPORT DATA ===');
+    console.log('=== DEBUG EXPORT DATA - MODIFICHE COMMERCIALISTA ===');
     console.log('Results array:', results);
     console.log('Results length:', results.length);
     
     if (results.length > 0) {
         console.log('Sample record:', results[0]);
         console.log('Record keys:', Object.keys(results[0]));
+        console.log('Numerazione progressiva presente:', !!results[0].numeroProgressivo);
+        console.log('Compenso presente:', !!results[0].compenso);
+        console.log('Rimborsi presenti:', !!results[0].rimborsoSpese);
+        
+        // Verifica calcoli
+        const sample = results[0];
+        if (sample.compenso && sample.rimborsoSpese !== undefined) {
+            const totaleCalcolato = sample.compenso + sample.rimborsoSpese;
+            console.log(`Esempio calcolo - Compenso: ${sample.compenso}, Rimborsi: ${sample.rimborsoSpese}, Totale: ${totaleCalcolato}`);
+        }
     }
     
     const validation = validateExportData();
@@ -442,12 +485,11 @@ window.validateExportData = validateExportData;
 window.debugExportData = debugExportData;
 
 // Debug - verifica che le funzioni siano esposte
-console.log('excel-export.js caricato - Funzioni esposte:', {
+console.log('excel-export.js caricato - Modifiche commercialista implementate:', {
     exportToExcel: typeof window.exportToExcel,
     exportToExcelByMonth: typeof window.exportToExcelByMonth,
     validateExportData: typeof window.validateExportData,
     debugExportData: typeof window.debugExportData
 });
 
-// Log caricamento modulo
-console.log('✅ excel-export.js caricato completamente');
+console.log('✅ excel-export.js caricato - Modifiche del commercialista applicate: Causale 104, separazione compensi/rimborsi, virgola italiana, conti bilancio');
