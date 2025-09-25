@@ -70,8 +70,11 @@ function exportToExcel() {
             try {
                 const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
                 const receiptNumber = getCurrentReceiptNumber(cfKey);
-                const today = new Date();
-                const dataDoc = today.toLocaleDateString('it-IT');
+                
+                // Data ricevuta = ultimo giorno del mese del pagamento
+                const lastDayOfMonth = new Date(person.anno, person.mese, 0);
+                const dataDoc = lastDayOfMonth.toLocaleDateString('it-IT');
+                
                 const denominazione = `${person.nome || ''} ${person.cognome || ''}`.trim();
                 
                 // Separa indirizzo e numero civico
@@ -268,8 +271,11 @@ function exportToExcelByMonth() {
                     try {
                         const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
                         const receiptNumber = getCurrentReceiptNumber(cfKey);
-                        const today = new Date();
-                        const dataDoc = today.toLocaleDateString('it-IT');
+                        
+                        // Data ricevuta = ultimo giorno del mese del pagamento
+                        const lastDayOfMonth = new Date(person.anno, person.mese, 0);
+                        const dataDoc = lastDayOfMonth.toLocaleDateString('it-IT');
+                        
                         const denominazione = `${person.nome || ''} ${person.cognome || ''}`.trim();
                         
                         // Separa indirizzo e numero civico
