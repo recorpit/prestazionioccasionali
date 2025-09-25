@@ -13,7 +13,7 @@ function checkPDFLibraries() {
         return false;
     }
     
-    console.log('✓ Tutte le librerie PDF sono caricate');
+    console.log('✅ Tutte le librerie PDF sono caricate');
     return true;
 }
 
@@ -310,7 +310,7 @@ async function exportPDFForMonth(meseAnno, ricevuteMese) {
         const downloadArea = document.getElementById('downloadArea');
         downloadArea.innerHTML = `
             <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
-                <h4 style="color: #155724; margin-bottom: 10px;">✓ ZIP generato con successo!</h4>
+                <h4 style="color: #155724; margin-bottom: 10px;">✅ ZIP generato con successo!</h4>
                 <p><strong>${nomeCompleto}</strong> - ${ricevuteMese.length} ricevute PDF</p>
                 <a href="${url}" download="${fileName}" 
                    style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
@@ -376,7 +376,7 @@ async function exportAllMonthsPDF(ricevutePerMese) {
     alert(`Completato! Generati ${Object.keys(ricevutePerMese).length} file ZIP.`);
 }
 
-// Funzione originale createZipWithPDFs mantenuta per compatibilità
+// Funzione originale createZipWithPDFs mantenuta per compatibilità 
 async function createZipWithPDFs() {
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -491,7 +491,7 @@ async function createZipWithPDFs() {
         const downloadArea = document.getElementById('downloadArea');
         downloadArea.innerHTML = `
             <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
-                <h4 style="color: #155724; margin-bottom: 10px;">✓ ZIP generato con successo!</h4>
+                <h4 style="color: #155724; margin-bottom: 10px;">✅ ZIP generato con successo!</h4>
                 <p>Contiene ${results.length} ricevute PDF</p>
                 <a href="${url}" download="Ricevute_${currentDate}.zip" 
                    style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
@@ -521,164 +521,27 @@ async function createZipWithPDFs() {
         updateProgressBar(0);
     }
 }
-    if (results.length === 0) {
-        alert('Prima devi eseguire il matching e generare le ricevute!');
-        return;
-    }
 
-    if (!checkPDFLibraries()) return;
+// Esposizione IMMEDIATA funzioni al contesto globale
+window.generatePDFPreviews = generatePDFPreviews;
+window.createZipWithPDFs = createZipWithPDFs;
+window.createZipWithPDFsByMonth = createZipWithPDFsByMonth;
+window.checkPDFLibraries = checkPDFLibraries;
 
-    // Calcola totali rimborsi e risparmio fiscale
-    const totaleRimborsi = results.reduce((sum, person) => sum + person.rimborsoSpese, 0);
-    const risparmioFiscale = totaleRimborsi * 0.20;
-    
-    // Mostra popup informativo
-    const conferma = confirm(
-        `RIEPILOGO RIMBORSI SPESE\n\n` +
-        `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
-        `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
-        `Procedere con la generazione del ZIP PDF?`
-    );
-    
-    if (!conferma) return;
+// Debug IMMEDIATO - verifica che le funzioni siano esposte
+console.log('🔍 pdf-export.js CARICATO - Verifico esposizione funzioni...');
+console.log('generatePDFPreviews:', typeof window.generatePDFPreviews);
+console.log('createZipWithPDFs:', typeof window.createZipWithPDFs);
+console.log('createZipWithPDFsByMonth:', typeof window.createZipWithPDFsByMonth);
 
-    const btn = document.getElementById('downloadBtn');
-    btn.innerHTML = '⏳ Generazione ZIP in corso...';
-    btn.disabled = true;
-    document.getElementById('progressBar').style.display = 'block';
+if (typeof window.generatePDFPreviews !== 'function') {
+    console.error('❌ ERRORE: generatePDFPreviews non è esposta correttamente!');
+} else {
+    console.log('✅ generatePDFPreviews esposta correttamente');
+}
 
-    try {
-        console.log('Inizio generazione ZIP PDF...');
-        
-        const zip = new JSZip();
-        const folder = zip.folder("Ricevute");
-        const receiptsElements = document.querySelectorAll('.ricevuta');
-
-        console.log(`Trovate ${receiptsElements.length} ricevute da convertire`);
-
-        // Processa ogni ricevuta
-        for (let index = 0; index < results.length && index < receiptsElements.length; index++) {
-            const person = results[index];
-            const receiptElement = receiptsElements[index];
-            
-            console.log(`Processando ricevuta ${index + 1}/${results.length}: ${person.nome} ${person.cognome}`);
-            
-            try {
-                // Genera immagine con html2canvas
-                const canvas = await html2canvas(receiptElement, {
-                    scale: 2, // Alta qualità per PDF finale
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                    useCORS: true,
-                    allowTaint: false,
-                    width: receiptElement.scrollWidth,
-                    height: receiptElement.scrollHeight,
-                    windowWidth: 1200,
-                    windowHeight: 1600
-                });
-                
-                console.log(`Canvas generato: ${canvas.width}x${canvas.height}`);
-                
-                // Crea PDF con jsPDF
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
-                });
-                
-                const imgData = canvas.toDataURL('image/png', 0.95);
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                
-                // Calcola dimensioni mantenendo proporzioni
-                let imgWidth = pdfWidth - 20; // margini di 10mm
-                let imgHeight = (canvas.height * imgWidth) / canvas.width;
-                
-                // Se troppo alto, ridimensiona
-                if (imgHeight > pdfHeight - 20) {
-                    imgHeight = pdfHeight - 20;
-                    imgWidth = (canvas.width * imgHeight) / canvas.height;
-                }
-                
-                // Centra l'immagine
-                const x = (pdfWidth - imgWidth) / 2;
-                const y = 10;
-                
-                pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-                
-                // Nome file formato: Nome_Cognome_NumeroProgressivo
-                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
-                const receiptNumber = getCurrentReceiptNumber(cfKey);
-                const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`
-                    .replace(/\s+/g, '_')
-                    .replace(/[^a-zA-Z0-9_\-\.]/g, '');
-                
-                console.log(`PDF generato: ${fileName}`);
-                
-                // Aggiungi al ZIP
-                const pdfBlob = pdf.output('blob');
-                folder.file(fileName, pdfBlob);
-                
-                // Aggiorna progress bar
-                const progress = ((index + 1) / results.length) * 90; // 90% per la generazione, 10% per il ZIP
-                updateProgressBar(progress);
-                
-                // Pausa per non bloccare il browser
-                await new Promise(resolve => setTimeout(resolve, 100));
-                
-            } catch (pdfError) {
-                console.error(`Errore nella generazione PDF ${index}:`, pdfError);
-                // Continua con la prossima ricevuta invece di fallire completamente
-            }
-        }
-        
-        console.log('Generazione ZIP finale...');
-        updateProgressBar(95);
-        
-        // Genera il ZIP finale
-        const content = await zip.generateAsync({
-            type: "blob",
-            compression: "DEFLATE",
-            compressionOptions: { level: 6 }
-        });
-        
-        updateProgressBar(100);
-        
-        const url = URL.createObjectURL(content);
-        const currentDate = new Date().toISOString().split('T')[0];
-        
-        // Mostra link di download
-        const downloadArea = document.getElementById('downloadArea');
-        downloadArea.innerHTML = `
-            <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
-                <h4 style="color: #155724; margin-bottom: 10px;">✓ ZIP generato con successo!</h4>
-                <p>Contiene ${results.length} ricevute PDF</p>
-                <a href="${url}" download="Ricevute_${currentDate}.zip" 
-                   style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
-                   📥 Clicca qui per scaricare il file ZIP
-                </a>
-            </div>
-        `;
-        
-        console.log('ZIP PDF generato con successo!');
-        downloadArea.scrollIntoView({ behavior: 'smooth' });
-
-    } catch (error) {
-        console.error('Errore nella generazione ZIP:', error);
-        
-        const downloadArea = document.getElementById('downloadArea');
-        downloadArea.innerHTML = `
-            <div class="error-box">
-                <h4>Errore nella generazione PDF</h4>
-                <p>Dettagli: ${error.message}</p>
-                <p>Prova a ricaricare la pagina e ripetere l'operazione.</p>
-            </div>
-        `;
-    } finally {
-        btn.innerHTML = 'Crea ZIP con PDF';
-        btn.disabled = false;
-        document.getElementById('progressBar').style.display = 'none';
-        updateProgressBar(0);
-    }
+if (typeof window.createZipWithPDFs !== 'function') {
+    console.error('❌ ERRORE: createZipWithPDFs non è esposta correttamente!');
+} else {
+    console.log('✅ createZipWithPDFs esposta correttamente');
 }
