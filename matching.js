@@ -15,6 +15,15 @@ function normalizeString(str) {
         .replace(/[^a-z0-9]/g, '');
 }
 
+// Estrai nome base per raggruppamento archivio
+function extractBaseName(controparte) {
+    if (!controparte) return '';
+    
+    // Estrae solo la parte alfabetica iniziale
+    const match = controparte.match(/^([A-Za-z]+)/);
+    return match ? match[1].toUpperCase() : controparte.toUpperCase();
+}
+
 // Calcolo similarità (Levenshtein)
 function calculateSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
@@ -163,8 +172,8 @@ async function showUnmatchedDialog(notMatched) {
         if (notMatched.length > 0) {
             const conferma = confirm(
                 `CONTROLLO NOMI SIMILI\n\n` +
-                `Trovati ${notMatched.length} movimenti non matchati automaticamente.\n\n` +
-                `Vuoi controllare manualmente se ci sono nomi simili?\n` +
+                `Trovati ${notMatched.length} movimenti con possibili nomi simili agli iscritti.\n\n` +
+                `Vuoi controllare manualmente le corrispondenze?\n` +
                 `(Es: "Sar Zen" potrebbe corrispondere a "Sara Zen")\n\n` +
                 `Clicca OK per iniziare il controllo manuale\n` +
                 `Clicca Annulla per saltare`
@@ -433,7 +442,7 @@ function loadMovimenti() {
     reader.readAsArrayBuffer(file);
 }
 
-// Matching principale - CON CONTROLLO NOMI SIMILI
+// Matching principale - CON PRE-FILTRO NOMI SIMILI
 async function performMatching() {
     if (iscrizioniData.length === 0 || movimentiData.length === 0) {
         alert('Carica prima entrambi i file Excel!');
@@ -446,7 +455,7 @@ async function performMatching() {
     movimentiIgnorati = [];
     accreditiDaControllare = [];
     
-    console.log('=== INIZIO MATCHING CON CONTROLLO NOMI SIMILI ===');
+    console.log('=== INIZIO MATCHING CON PRE-FILTRO NOMI SIMILI ===');
     console.log('Movimenti totali:', movimentiData.length);
     console.log('Iscrizioni totali:', iscrizioniData.length);
     
@@ -527,20 +536,47 @@ async function performMatching() {
                     data: addebito.data,
                     tipo: 'ADDEBITO',
                     index: addebito.index,
-                    motivo: 'Persona non presente nelle iscrizioni (controllo nomi simili necessario)'
+                    motivo: 'Persona non presente nelle iscrizioni'
                 });
             }
         }
     });
     
     console.log('Movimenti matchati automaticamente:', movimentiMatchati.length);
-    console.log('Addebiti non matchati (da controllare):', addebitiNonMatchati.length);
+    console.log('Addebiti non matchati:', addebitiNonMatchati.length);
     
-    // STEP 3: CONTROLLO MANUALE NOMI SIMILI
-    let matchManuali = [];
+    // STEP 3: PRE-FILTRA I NON MATCHATI - Solo quelli con similarità agli iscritti
+    let addebitiConNomiSimili = [];
+    let addebitiSenzaNomiSimili = [];
+    
     if (addebitiNonMatchati.length > 0) {
-        console.log('Avvio controllo manuale nomi simili...');
-        matchManuali = await showUnmatchedDialog(addebitiNonMatchati);
+        console.log('Pre-filtraggio addebiti non matchati per nomi simili...');
+        
+        addebitiNonMatchati.forEach(addebito => {
+            // Cerca se ha almeno un nome simile negli iscritti
+            const hasSimilarNames = findSimilarMatches(addebito.controparte, iscrizioniData, 0.7);
+            
+            if (hasSimilarNames.length > 0) {
+                // Ha nomi simili - va al controllo manuale
+                addebitiConNomiSimili.push(addebito);
+                console.log(`Controllo manuale necessario per "${addebito.controparte}" - ${hasSimilarNames.length} nomi simili trovati`);
+            } else {
+                // Nessun nome simile - va direttamente in archivio
+                addebitiSenzaNomiSimili.push(addebito);
+                console.log(`Archivio diretto per "${addebito.controparte}" - nessuna similarità trovata`);
+            }
+        });
+        
+        console.log(`Pre-filtraggio completato:`);
+        console.log(`- Da controllare manualmente: ${addebitiConNomiSimili.length}`);
+        console.log(`- Archivio diretto: ${addebitiSenzaNomiSimili.length}`);
+    }
+    
+    // STEP 4: CONTROLLO MANUALE NOMI SIMILI - Solo sui pre-filtrati
+    let matchManuali = [];
+    if (addebitiConNomiSimili.length > 0) {
+        console.log('Avvio controllo manuale solo sui nomi potenzialmente simili...');
+        matchManuali = await showUnmatchedDialog(addebitiConNomiSimili);
         console.log('Match manuali ottenuti:', matchManuali.length);
         
         // Aggiungi i match manuali a quelli automatici
@@ -557,15 +593,16 @@ async function performMatching() {
             });
         });
         
-        // Rimuovi dai non matchati quelli che sono stati matchati manualmente
+        // Rimuovi dai "con nomi simili" quelli che sono stati matchati manualmente
         const matchedMovements = new Set(matchManuali.map(m => m.movimento));
-        addebitiNonMatchati = addebitiNonMatchati.filter(addebito => !matchedMovements.has(addebito.movimento));
+        addebitiConNomiSimili = addebitiConNomiSimili.filter(addebito => !matchedMovements.has(addebito.movimento));
     }
     
-    // Gli addebiti rimasti vanno in archivio
-    movimentiNonMatchati = addebitiNonMatchati;
+    // STEP 5: Componi l'archivio finale
+    // Gli addebiti rimasti (senza nomi simili + con nomi simili non matchati) vanno in archivio
+    movimentiNonMatchati = [...addebitiSenzaNomiSimili, ...addebitiConNomiSimili];
     
-    // STEP 4: Processa ACCREDITI - Solo se presente nelle iscrizioni (sospetti)
+    // STEP 6: Processa ACCREDITI - Solo se presente nelle iscrizioni (sospetti)
     accrediti.forEach(accredito => {
         const persona = findPersonaByControparte(accredito.controparte, accredito.movimento, iscrizioniData);
         
@@ -585,18 +622,20 @@ async function performMatching() {
         // Gli accrediti da persone NON nelle iscrizioni vengono completamente ignorati
     });
     
-    console.log('=== RISULTATI MATCHING CON CONTROLLO NOMI SIMILI ===');
+    console.log('=== RISULTATI MATCHING CON PRE-FILTRO NOMI SIMILI ===');
     console.log('Movimenti matchati totali (auto + manuali):', movimentiMatchati.length);
     console.log('- Match automatici:', movimentiMatchati.filter(m => m.tipo === 'ADDEBITO').length);
     console.log('- Match manuali:', movimentiMatchati.filter(m => m.tipo === 'MATCH_MANUALE').length);
     console.log('Movimenti non matchati (archivio):', movimentiNonMatchati.length);
+    console.log('- Senza nomi simili:', addebitiSenzaNomiSimili.length);
+    console.log('- Con nomi simili non associati:', addebitiConNomiSimili.length);
     console.log('Accrediti da controllare:', accreditiDaControllare.length);
     
     // Mostra i risultati
     showMatchingResults();
 }
 
-// Visualizzazione risultati con info sui match manuali
+// Visualizzazione risultati con archivio raggruppato per nome base
 function showMatchingResults() {
     const resultDiv = document.getElementById('matchingResult');
     
@@ -605,7 +644,7 @@ function showMatchingResults() {
     
     let html = `
         <div class="info-box">
-            <strong>📊 RISULTATI MATCHING CON CONTROLLO NOMI SIMILI:</strong><br>
+            <strong>📊 RISULTATI MATCHING CON PRE-FILTRO NOMI SIMILI:</strong><br>
             ✅ Match automatici: <strong>${matchAutomatici}</strong><br>
             🔍 Match manuali (nomi simili): <strong>${matchManuali}</strong><br>
             📝 Totale processabili: <strong>${movimentiMatchati.length}</strong><br>
@@ -681,7 +720,7 @@ function showMatchingResults() {
             html += `
                 <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 10px;">
                     <strong>🔍 Controllo nomi simili completato:</strong> ${matchManuali} corrispondenze trovate manualmente.<br>
-                    Esempi: "Sar Zen" → "Sara Zen", nomi con piccole differenze ortografiche.
+                    Il controllo è stato fatto solo sui movimenti con possibili nomi simili agli iscritti.
                 </div>
             `;
         }
@@ -738,27 +777,31 @@ function showMatchingResults() {
         `;
     }
     
-    // SEZIONE 3: ARCHIVIO NON MATCHATI CON RAGGRUPPAMENTO PER CONTROPARTE
+    // SEZIONE 3: ARCHIVIO RAGGRUPPATO PER NOME BASE
     if (movimentiNonMatchati.length > 0) {
-        // RAGGRUPPA per controparte e somma importi
+        // RAGGRUPPA per nome base (parte alfabetica)
         const raggruppamentiArchivio = {};
         let totaleArchivio = 0;
         
         movimentiNonMatchati.forEach(movimento => {
-            const key = normalizeString(movimento.controparte);
+            const nomeBase = extractBaseName(movimento.controparte);
+            const key = normalizeString(nomeBase);
             
             if (!raggruppamentiArchivio[key]) {
                 raggruppamentiArchivio[key] = {
-                    controparte: movimento.controparte, // Nome originale
+                    nomeBase: nomeBase, // Nome base (es: MICROSOFT)
+                    controparti: new Set(), // Set di controparti complete
                     importoTotale: 0,
                     movimenti: [],
                     numeroMovimenti: 0
                 };
             }
             
+            raggruppamentiArchivio[key].controparti.add(movimento.controparte);
             raggruppamentiArchivio[key].importoTotale += movimento.importo;
             raggruppamentiArchivio[key].numeroMovimenti++;
             raggruppamentiArchivio[key].movimenti.push({
+                controparte: movimento.controparte, // Nome completo
                 importo: movimento.importo,
                 data: movimento.data,
                 index: movimento.index
@@ -767,23 +810,27 @@ function showMatchingResults() {
             totaleArchivio += movimento.importo;
         });
         
-        // Ordina per importo decrescente
+        // Converti Set in Array e ordina per importo decrescente
         const archivioOrdinato = Object.values(raggruppamentiArchivio)
+            .map(gruppo => ({
+                ...gruppo,
+                controparti: Array.from(gruppo.controparti).sort()
+            }))
             .sort((a, b) => b.importoTotale - a.importoTotale);
         
         html += `
             <h3 style="color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px; margin-top: 20px;">
-                📁 Archivio Non Matchati - ${archivioOrdinato.length} controparti diverse
+                📁 Archivio Non Matchati - ${archivioOrdinato.length} nomi base diversi
             </h3>
-            <p>Addebiti non trovati nelle iscrizioni nemmeno con controllo nomi simili:</p>
+            <p>Addebiti raggruppati per nome base (es: MICROSOFT*, AMAZON*, ecc.)</p>
             
             <table>
                 <thead>
                     <tr>
-                        <th>Controparte</th>
+                        <th>Nome Base</th>
+                        <th>Varianti</th>
                         <th>N° Movimenti</th>
                         <th>Importo Totale</th>
-                        <th>Importo Medio</th>
                         <th>Azioni</th>
                     </tr>
                 </thead>
@@ -792,37 +839,48 @@ function showMatchingResults() {
         
         archivioOrdinato.forEach((gruppo, index) => {
             const importoMedio = gruppo.importoTotale / gruppo.numeroMovimenti;
+            const variantiMostrate = gruppo.controparti.slice(0, 3).join(', ');
+            const altreVarianti = gruppo.controparti.length > 3 ? `... (+${gruppo.controparti.length - 3})` : '';
             
             html += `
                 <tr>
                     <td>
-                        <strong>${gruppo.controparte}</strong>
-                        <br><small style="color: #666;">Primo: ${gruppo.movimenti[0].data.toLocaleDateString('it-IT')} - 
-                        Ultimo: ${gruppo.movimenti[gruppo.movimenti.length - 1].data.toLocaleDateString('it-IT')}</small>
+                        <strong style="font-size: 16px; color: #721c24;">${gruppo.nomeBase}</strong>
+                        <br><small style="color: #666;">Prima: ${gruppo.movimenti[0].data.toLocaleDateString('it-IT')} - 
+                        Ultima: ${gruppo.movimenti[gruppo.movimenti.length - 1].data.toLocaleDateString('it-IT')}</small>
+                    </td>
+                    <td style="font-size: 12px; max-width: 200px;">
+                        ${variantiMostrate}${altreVarianti}
                     </td>
                     <td style="text-align: center;">
                         <strong>${gruppo.numeroMovimenti}</strong>
+                        <br><small>€${importoMedio.toFixed(2)} medio</small>
                     </td>
                     <td style="text-align: right;">
-                        <strong style="font-size: 16px;">€ ${gruppo.importoTotale.toFixed(2)}</strong>
-                    </td>
-                    <td style="text-align: right;">
-                        <small>€ ${importoMedio.toFixed(2)}</small>
+                        <strong style="font-size: 16px; color: #721c24;">€ ${gruppo.importoTotale.toFixed(2)}</strong>
                     </td>
                     <td>
                         <button onclick="showGroupDetails(${index})" 
-                                style="background: #007bff; font-size: 11px; padding: 4px 8px; margin: 2px;">
+                                style="background: #007bff; color: white; border: none; font-size: 11px; padding: 4px 8px; margin: 2px; border-radius: 3px; cursor: pointer;">
                             Dettagli
                         </button>
                     </td>
                 </tr>
                 <tr id="details_${index}" style="display: none; background-color: #f8f9fa;">
                     <td colspan="5">
-                        <div style="padding: 10px;">
-                            <strong>Dettaglio movimenti:</strong><br>
-                            ${gruppo.movimenti.map(mov => 
-                                `• €${mov.importo.toFixed(2)} - ${mov.data.toLocaleDateString('it-IT')}`
-                            ).join('<br>')}
+                        <div style="padding: 15px;">
+                            <h5 style="margin: 0 0 10px 0; color: #721c24;">Dettaglio movimenti per ${gruppo.nomeBase}:</h5>
+                            <div style="max-height: 200px; overflow-y: auto; font-size: 13px;">
+                                ${gruppo.movimenti.map(mov => 
+                                    `<div style="padding: 3px 0; border-bottom: 1px solid #dee2e6;">
+                                        <strong>${mov.controparte}</strong> - €${mov.importo.toFixed(2)} - ${mov.data.toLocaleDateString('it-IT')}
+                                    </div>`
+                                ).join('')}
+                            </div>
+                            <div style="margin-top: 10px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 12px;">
+                                <strong>Riepilogo ${gruppo.nomeBase}:</strong> ${gruppo.controparti.length} varianti diverse, 
+                                ${gruppo.numeroMovimenti} movimenti, €${gruppo.importoTotale.toFixed(2)} totali
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -834,9 +892,10 @@ function showMatchingResults() {
                 <tfoot style="background-color: #721c24; color: white;">
                     <tr>
                         <td><strong>TOTALI ARCHIVIO</strong></td>
+                        <td style="text-align: center;"><strong>${movimentiNonMatchati.length} originali</strong></td>
                         <td style="text-align: center;"><strong>${movimentiNonMatchati.length}</strong></td>
                         <td style="text-align: right;"><strong>€ ${totaleArchivio.toFixed(2)}</strong></td>
-                        <td colspan="2">-</td>
+                        <td>-</td>
                     </tr>
                 </tfoot>
             </table>
@@ -853,7 +912,7 @@ function showMatchingResults() {
                 <h4 style="color: #155724;">🚀 Pronto per Generare le Ricevute!</h4>
                 <p>Trovati <strong>${movimentiMatchati.length}</strong> movimenti processabili (${matchAutomatici} automatici + ${matchManuali} manuali).</p>
                 <button onclick="proceedToGeneration()" 
-                        style="background: #28a745; font-size: 18px; padding: 15px 30px; border-radius: 8px;">
+                        style="background: #28a745; color: white; border: none; font-size: 18px; padding: 15px 30px; border-radius: 8px; cursor: pointer;">
                     Procedi alla Generazione Ricevute
                 </button>
             </div>
@@ -863,7 +922,7 @@ function showMatchingResults() {
     resultDiv.innerHTML = html;
 }
 
-// Funzioni di gestione archivio (già presenti)
+// Funzioni di gestione archivio
 function showGroupDetails(index) {
     const detailRow = document.getElementById(`details_${index}`);
     if (detailRow) {
@@ -875,7 +934,7 @@ function showGroupDetails(index) {
     }
 }
 
-// Procedi alla generazione - identica alla versione precedente
+// Procedi alla generazione
 function proceedToGeneration() {
     if (movimentiMatchati.length === 0) {
         alert('Nessun movimento processabile trovato!');
@@ -940,7 +999,7 @@ function proceedToGeneration() {
         });
     });
     
-    console.log('Results generati con controllo nomi simili:', results.length);
+    console.log('Results generati con pre-filtro nomi simili e archivio raggruppato:', results.length);
     
     // Abilita generazione ricevute
     document.getElementById('generateBtn').disabled = false;
@@ -948,7 +1007,7 @@ function proceedToGeneration() {
     const matchAutomatici = movimentiMatchati.filter(m => m.tipo === 'ADDEBITO').length;
     const matchManuali = movimentiMatchati.filter(m => m.tipo === 'MATCH_MANUALE').length;
     
-    alert(`✅ Elaborazione completata con controllo nomi simili!\n\nSaranno generate ${results.length} ricevute (raggruppate per mese).\n\nMatch trovati:\n• ${matchAutomatici} automatici\n• ${matchManuali} manuali (nomi simili)\n\nOra puoi cliccare su "Genera Ricevute" per creare i documenti HTML.`);
+    alert(`✅ Elaborazione completata con archivio intelligente!\n\nSaranno generate ${results.length} ricevute (raggruppate per mese).\n\nMatch trovati:\n• ${matchAutomatici} automatici\n• ${matchManuali} manuali (solo per nomi simili)\n\nL'archivio raggruppa i movimenti per nome base (es: MICROSOFT*)\n\nOra puoi cliccare su "Genera Ricevute" per creare i documenti HTML.`);
 }
 
 // Esposizione funzioni al contesto globale
@@ -957,11 +1016,11 @@ window.loadMovimenti = loadMovimenti;
 window.performMatching = performMatching;
 window.showGroupDetails = showGroupDetails;
 window.proceedToGeneration = proceedToGeneration;
+window.extractBaseName = extractBaseName;
 
-console.log('🔍 matching.js CARICATO - Sistema controllo nomi simili implementato');
+console.log('🔍 matching.js CARICATO - Sistema con archivio raggruppato per nome base implementato');
 console.log('Funzioni esposte:', {
     loadIscrizioni: typeof window.loadIscrizioni,
     performMatching: typeof window.performMatching,
-    calculateSimilarity: typeof calculateSimilarity,
-    findSimilarMatches: typeof findSimilarMatches
+    extractBaseName: typeof window.extractBaseName
 });
