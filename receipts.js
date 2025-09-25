@@ -33,6 +33,18 @@ function generateReceipts() {
     let totalePrestazioni = 0;
     let totaleRimborsi = 0;
     
+    // Prima di elaborare le ricevute, assicurati che siano ordinate per data
+    results.sort((a, b) => {
+        // Ordina per anno e poi per mese
+        if (a.anno !== b.anno) {
+            return a.anno - b.anno;
+        }
+        return a.mese - b.mese;
+    });
+    
+    console.log('Results ordinati per data prima della generazione:', 
+        results.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome}`));
+    
     results.forEach((person, index) => {
         // Controllo limite €2.500
         const compensoNetto = person.compenso * 0.8;
