@@ -76,7 +76,11 @@ function exportToExcel() {
             'Esigibilita\' IVA'      // 28
         ]);
 
-        // Elabora ogni ricevuta NELL'ORDINE CORRETTO
+        // CORREZIONE NUMERAZIONE PROGRESSIVA PER EXCEL
+        // Crea una mappa temporanea per numerazione corretta nell'ordine cronologico
+        const numeroTemporaneoPerCF = {};
+        
+        // Elabora ogni ricevuta NELL'ORDINE CORRETTO per ricostruire numerazione
         resultsOrdinati.forEach((person, index) => {
             try {
                 const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
@@ -275,6 +279,16 @@ function exportToExcelByMonth() {
                 console.log(`Creando Excel per: ${nomeCompletoMese} (${ricevuteMese.length} ricevute)`);
 
                 const excelData = [];
+                
+                // NUMERAZIONE TEMPORANEA PER QUESTO MESE (nell'ordine cronologico)
+                const numeroTemporaneoPerCF = {};
+                
+                // Ordina le ricevute di questo mese per CF per mantenere coerenza numerica
+                const ricevuteMeseOrdinate = ricevuteMese.sort((a, b) => {
+                    const cfA = a.codiceFiscale || `${a.nome}_${a.cognome}`;
+                    const cfB = b.codiceFiscale || `${b.nome}_${b.cognome}`;
+                    return cfA.localeCompare(cfB);
+                });
                 
                 // Intestazione - 28 colonne identica al singolo
                 excelData.push([
