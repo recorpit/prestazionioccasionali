@@ -1,24 +1,163 @@
-// Variabili globali
+// Variabili globali per il sistema
 let iscrizioniData = [];
 let movimentiData = [];
 let results = [];
 
-// Memoria locale per numeri progressivi e importi annuali
-let numeroRicevutaPerCF = JSON.parse(localStorage.getItem('numeroRicevutaPerCF')) || {};
-let importiAnnualiPerCF = JSON.parse(localStorage.getItem('importiAnnualiPerCF')) || {};
+// Contatori per numerazione ricevute
+let numeroRicevutaPerCF = {};
+let importiAnnualiPerCF = {};
 
-// Salvataggio localStorage
-function saveToLocalStorage() {
-    try {
-        localStorage.setItem('numeroRicevutaPerCF', JSON.stringify(numeroRicevutaPerCF));
-        localStorage.setItem('importiAnnualiPerCF', JSON.stringify(importiAnnualiPerCF));
-        console.log('Dati salvati in localStorage');
-    } catch (error) {
-        console.error('Errore salvataggio localStorage:', error);
+// Sistema Progress Bar Avanzato
+let progressState = {
+    isActive: false,
+    currentStep: '',
+    currentProgress: 0,
+    totalSteps: 0,
+    currentStepIndex: 0,
+    startTime: null,
+    stepStartTime: null
+};
+
+// Inizializza progress bar per un processo
+function initProgressBar(steps, processName = '') {
+    progressState = {
+        isActive: true,
+        currentStep: processName,
+        currentProgress: 0,
+        totalSteps: steps.length,
+        currentStepIndex: 0,
+        startTime: Date.now(),
+        stepStartTime: Date.now(),
+        steps: steps
+    };
+    
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const progressPercent = document.getElementById('progressPercent');
+    
+    if (progressBar) {
+        progressBar.style.display = 'block';
+        progressBar.innerHTML = `
+            <div class="progress-header">
+                <div class="progress-title">${processName}</div>
+                <div class="progress-percent" id="progressPercent">0%</div>
+            </div>
+            <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+            <div class="progress-text" id="progressText">Inizializzazione...</div>
+            <div class="progress-stats" id="progressStats">
+                <span id="progressStep">Step 0/${steps.length}</span>
+                <span id="progressTime">Tempo: 0s</span>
+                <span id="progressETA">ETA: --</span>
+            </div>
+        `;
+    }
+    
+    console.log(`📊 Progress Bar inizializzata: ${processName} (${steps.length} steps)`);
+}
+
+// Aggiorna step corrente
+function updateProgressStep(stepIndex, stepName, progress = 0) {
+    if (!progressState.isActive) return;
+    
+    progressState.currentStepIndex = stepIndex;
+    progressState.currentStep = stepName;
+    progressState.stepStartTime = Date.now();
+    
+    // Calcola progress globale
+    const stepProgress = stepIndex / progressState.totalSteps * 100;
+    const innerProgress = (progress / 100) * (100 / progressState.totalSteps);
+    const totalProgress = Math.min(stepProgress + innerProgress, 100);
+    
+    updateProgressDisplay(totalProgress, stepName, stepIndex);
+    
+    console.log(`📈 Step ${stepIndex + 1}/${progressState.totalSteps}: ${stepName} (${progress}%)`);
+}
+
+// Aggiorna progress all'interno dello step corrente
+function updateProgressInStep(progress, detail = '') {
+    if (!progressState.isActive) return;
+    
+    // Calcola progress totale
+    const stepProgress = progressState.currentStepIndex / progressState.totalSteps * 100;
+    const innerProgress = (progress / 100) * (100 / progressState.totalSteps);
+    const totalProgress = Math.min(stepProgress + innerProgress, 100);
+    
+    const displayText = detail ? `${progressState.currentStep}: ${detail}` : progressState.currentStep;
+    updateProgressDisplay(totalProgress, displayText, progressState.currentStepIndex, progress);
+}
+
+// Aggiorna la visualizzazione della progress bar
+function updateProgressDisplay(totalProgress, stepText, stepIndex, stepProgress = null) {
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressStep = document.getElementById('progressStep');
+    const progressTime = document.getElementById('progressTime');
+    const progressETA = document.getElementById('progressETA');
+    
+    if (progressFill) {
+        progressFill.style.width = `${totalProgress}%`;
+        
+        // Colore progressivo
+        if (totalProgress < 30) {
+            progressFill.style.background = '#dc3545'; // Rosso
+        } else if (totalProgress < 70) {
+            progressFill.style.background = '#ffc107'; // Giallo
+        } else {
+            progressFill.style.background = '#28a745'; // Verde
+        }
+    }
+    
+    if (progressPercent) {
+        progressPercent.textContent = `${Math.round(totalProgress)}%`;
+    }
+    
+    if (progressText) {
+        const displayText = stepProgress !== null ? 
+            `${stepText} (${stepProgress}%)` : stepText;
+        progressText.textContent = displayText;
+    }
+    
+    // Aggiorna statistiche
+    const elapsed = (Date.now() - progressState.startTime) / 1000;
+    const eta = totalProgress > 5 ? 
+        Math.round((elapsed / totalProgress) * (100 - totalProgress)) : null;
+    
+    if (progressStep) {
+        progressStep.textContent = `Step ${stepIndex + 1}/${progressState.totalSteps}`;
+    }
+    
+    if (progressTime) {
+        progressTime.textContent = `Tempo: ${Math.round(elapsed)}s`;
+    }
+    
+    if (progressETA && eta) {
+        progressETA.textContent = `ETA: ${eta}s`;
     }
 }
 
-// SISTEMA DI NUMERAZIONE UNIFICATO - FUNZIONE PRINCIPALE
+// Completa progress bar
+function completeProgressBar(message = 'Completato!') {
+    if (!progressState.isActive) return;
+    
+    const totalTime = (Date.now() - progressState.startTime) / 1000;
+    
+    updateProgressDisplay(100, message, progressState.totalSteps - 1);
+    
+    // Mostra completamento per 2 secondi
+    setTimeout(() => {
+        const progressBar = document.getElementById('progressBar');
+        if (progressBar) {
+            progressBar.style.display = 'none';
+        }
+        progressState.isActive = false;
+    }, 2000);
+    
+    console.log(`✅ Progress completata: ${message} (${Math.round(totalTime)}s)`);
+}
+
+// Sistema di numerazione unificato
 function assignProgressiveNumbers() {
     console.log('🔢 Assegnazione numeri progressivi cronologici...');
     
@@ -35,9 +174,6 @@ function assignProgressiveNumbers() {
         return a.mese - b.mese;
     });
 
-    console.log('Results ordinati per numerazione:', 
-        resultsOrdinati.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome}`));
-
     // Resetta la numerazione per CF
     const numeroProgressivoPerCF = {};
 
@@ -45,123 +181,117 @@ function assignProgressiveNumbers() {
     resultsOrdinati.forEach((person) => {
         const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
         
-        // Incrementa il numero per questo CF
         if (!numeroProgressivoPerCF[cfKey]) {
             numeroProgressivoPerCF[cfKey] = 1;
         } else {
             numeroProgressivoPerCF[cfKey]++;
         }
 
-        // Assegna il numero progressivo alla ricevuta
         person.numeroProgressivo = numeroProgressivoPerCF[cfKey];
-        
         console.log(`${person.nome} ${person.cognome} - ${person.mese}/${person.anno} → Numero: ${person.numeroProgressivo}`);
     });
 
-    // Aggiorna i results originali con la numerazione corretta
     window.results = resultsOrdinati;
-    
     console.log('✅ Numerazione progressiva completata');
 }
 
-// Gestione numerazione ricevute - MANTIENE COMPATIBILITÀ
-function getNextReceiptNumber(cf) {
-    if (!cf) {
-        console.error('getNextReceiptNumber chiamato senza CF');
-        return 1;
+// Gestione numerazione (mantenuta per compatibilità)
+function getNextReceiptNumber(cfKey) {
+    if (!numeroRicevutaPerCF[cfKey]) {
+        numeroRicevutaPerCF[cfKey] = 1;
+    } else {
+        numeroRicevutaPerCF[cfKey]++;
     }
     
-    if (!numeroRicevutaPerCF[cf]) {
-        numeroRicevutaPerCF[cf] = 0;
-    }
-    numeroRicevutaPerCF[cf]++;
     saveToLocalStorage();
-    
-    console.log(`Nuovo numero ricevuta per ${cf}: ${numeroRicevutaPerCF[cf]}`);
-    return numeroRicevutaPerCF[cf];
+    return numeroRicevutaPerCF[cfKey];
 }
 
-function getCurrentReceiptNumber(cf) {
-    if (!cf) {
-        console.error('getCurrentReceiptNumber chiamato senza CF');
-        return 0;
-    }
-    return numeroRicevutaPerCF[cf] || 0;
+function getCurrentReceiptNumber(cfKey) {
+    return numeroRicevutaPerCF[cfKey] || 1;
 }
 
 function resetAllCounters() {
-    const conferma = confirm(
-        'Sei sicuro di voler resettare tutti i numeri progressivi delle ricevute e gli importi annuali?\n\n' +
-        'Questa operazione cancellerà:\n' +
-        '• Tutti i numeri progressivi delle ricevute\n' +
-        '• Tutti gli importi annuali registrati\n\n' +
-        'Questa operazione NON può essere annullata!'
-    );
-    
+    const conferma = confirm('Sei sicuro di voler resettare tutti i contatori di numerazione ricevute?');
     if (conferma) {
-        const secondaConferma = confirm('ULTIMA CONFERMA: Procedere con il reset completo?');
-        if (secondaConferma) {
-            numeroRicevutaPerCF = {};
-            importiAnnualiPerCF = {};
-            
-            try {
-                localStorage.removeItem('numeroRicevutaPerCF');
-                localStorage.removeItem('importiAnnualiPerCF');
-                console.log('Reset completato - localStorage pulito');
-                alert('Reset completato! Tutti i contatori sono stati azzerati.');
-            } catch (error) {
-                console.error('Errore durante il reset:', error);
-                alert('Errore durante il reset. Controlla la console.');
-            }
-        }
+        numeroRicevutaPerCF = {};
+        importiAnnualiPerCF = {};
+        localStorage.removeItem('numeroRicevutaPerCF');
+        localStorage.removeItem('importiAnnualiPerCF');
+        alert('Contatori resettati con successo!');
+        console.log('🔄 Tutti i contatori sono stati resettati');
     }
 }
 
-// Controllo limite annuale €2.500
-function checkAndUpdateAnnualAmount(cf, compensoNetto) {
-    if (!cf || typeof compensoNetto !== 'number') {
-        console.error('checkAndUpdateAnnualAmount: parametri non validi', { cf, compensoNetto });
+function saveToLocalStorage() {
+    try {
+        localStorage.setItem('numeroRicevutaPerCF', JSON.stringify(numeroRicevutaPerCF));
+        localStorage.setItem('importiAnnualiPerCF', JSON.stringify(importiAnnualiPerCF));
+    } catch (error) {
+        console.error('Errore nel salvare in localStorage:', error);
+    }
+}
+
+function loadFromLocalStorage() {
+    try {
+        const savedNumbers = localStorage.getItem('numeroRicevutaPerCF');
+        const savedAmounts = localStorage.getItem('importiAnnualiPerCF');
+        
+        if (savedNumbers) {
+            numeroRicevutaPerCF = JSON.parse(savedNumbers);
+        }
+        if (savedAmounts) {
+            importiAnnualiPerCF = JSON.parse(savedAmounts);
+        }
+        
+        console.log('📥 Dati caricati dal localStorage');
+    } catch (error) {
+        console.error('Errore nel caricare da localStorage:', error);
+        numeroRicevutaPerCF = {};
+        importiAnnualiPerCF = {};
+    }
+}
+
+// Controllo importi annuali
+function checkAndUpdateAnnualAmount(cfKey, amount) {
+    const currentYear = new Date().getFullYear();
+    
+    if (!importiAnnualiPerCF[cfKey]) {
+        importiAnnualiPerCF[cfKey] = {};
+    }
+    if (!importiAnnualiPerCF[cfKey][currentYear]) {
+        importiAnnualiPerCF[cfKey][currentYear] = 0;
+    }
+    
+    importiAnnualiPerCF[cfKey][currentYear] += amount;
+    
+    if (importiAnnualiPerCF[cfKey][currentYear] > 5000) {
+        console.warn(`⚠️ ATTENZIONE: ${cfKey} ha superato 5.000€ nel ${currentYear}!`);
         return {
-            superaLimite: false,
-            totaleAttuale: 0,
-            nuovoTotale: 0
+            warning: true,
+            total: importiAnnualiPerCF[cfKey][currentYear],
+            year: currentYear
         };
     }
     
-    if (!importiAnnualiPerCF[cf]) {
-        importiAnnualiPerCF[cf] = 0;
-    }
-    
-    const totaleAttuale = importiAnnualiPerCF[cf];
-    const nuovoTotale = totaleAttuale + compensoNetto;
-    
-    importiAnnualiPerCF[cf] = nuovoTotale;
     saveToLocalStorage();
-    
-    console.log(`Controllo limite per ${cf}: ${totaleAttuale} + ${compensoNetto} = ${nuovoTotale}`);
-    
-    const superaLimite = totaleAttuale <= 2500 && nuovoTotale > 2500;
-    
     return {
-        superaLimite: superaLimite,
-        totaleAttuale: totaleAttuale,
-        nuovoTotale: nuovoTotale
+        warning: false,
+        total: importiAnnualiPerCF[cfKey][currentYear],
+        year: currentYear
     };
 }
 
-// Normalizzazione stringhe per matching
+// Utility functions
 function normalizeString(str) {
     if (!str) return '';
     return str.toString()
         .toLowerCase()
-        .trim()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // Rimuove accenti
-        .replace(/[^a-z0-9\s]/g, '') // Solo lettere, numeri e spazi
-        .replace(/\s+/g, ''); // Rimuove tutti gli spazi
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
 }
 
-// Calcolo similarità Levenshtein
 function calculateSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
     
@@ -169,365 +299,223 @@ function calculateSimilarity(str1, str2) {
     const s2 = normalizeString(str2);
     
     if (s1 === s2) return 1;
-    if (s1.length === 0) return s2.length === 0 ? 1 : 0;
-    if (s2.length === 0) return 0;
     
     const matrix = [];
     const len1 = s1.length;
     const len2 = s2.length;
     
-    // Inizializza matrice
     for (let i = 0; i <= len2; i++) {
         matrix[i] = [i];
     }
+    
     for (let j = 0; j <= len1; j++) {
         matrix[0][j] = j;
     }
     
-    // Calcola distanza
     for (let i = 1; i <= len2; i++) {
         for (let j = 1; j <= len1; j++) {
             if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
                 matrix[i][j] = matrix[i - 1][j - 1];
             } else {
                 matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1, // sostituzione
-                    matrix[i][j - 1] + 1,     // inserimento
-                    matrix[i - 1][j] + 1      // cancellazione
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
                 );
             }
         }
     }
     
-    const distance = matrix[len2][len1];
     const maxLen = Math.max(len1, len2);
-    const similarity = maxLen === 0 ? 1 : (maxLen - distance) / maxLen;
-    
-    return Math.max(0, similarity); // Assicura che sia >= 0
+    return maxLen === 0 ? 1 : (maxLen - matrix[len2][len1]) / maxLen;
 }
 
-// Calcolo rimborsi spese - SCALA AGGIORNATA
 function calculateRimborsoSpese(importo) {
-    if (typeof importo !== 'number' || importo < 0) {
-        console.error('calculateRimborsoSpese: importo non valido', importo);
-        return 0;
-    }
-    
-    if (importo >= 500) {
-        const rimborso = importo * 0.40; // 40% per importi ≥ 500€
-        console.log(`Rimborso 40% per ${importo}: ${rimborso}`);
-        return rimborso;
-    }
+    if (importo >= 500) return importo * 0.40;
     if (importo >= 450) return 200;
     if (importo >= 350) return 150;
     if (importo >= 250) return 100;
     if (importo >= 150) return 60;
     if (importo >= 80) return 40;
-    if (importo >= 51) return 30;   // 30€ tra 51-80€
-    if (importo >= 1) return 20;    // 20€ sotto 51€ (minimo 1€)
-    
+    if (importo >= 51) return 30;
+    if (importo >= 1) return 20;
     return 0;
 }
 
-// Gestione tab interfaccia
-function showTab(tabName) {
-    try {
-        // Rimuovi active da tutti i tab
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.remove('active');
-        });
-        
-        // Attiva il tab selezionato
-        if (event && event.target) {
-            event.target.classList.add('active');
-        }
-        
-        const targetContent = document.getElementById(tabName + 'Tab');
-        if (targetContent) {
-            targetContent.classList.add('active');
-            console.log(`Tab attivato: ${tabName}`);
-        } else {
-            console.error(`Tab content non trovato: ${tabName}Tab`);
-        }
-    } catch (error) {
-        console.error('Errore nella gestione tab:', error);
-    }
-}
-
-// Progress bar
-function updateProgressBar(progress) {
-    try {
-        const progressFill = document.getElementById('progressFill');
-        if (progressFill) {
-            // Assicura che progress sia tra 0 e 100
-            const normalizedProgress = Math.min(100, Math.max(0, progress));
-            progressFill.style.width = normalizedProgress + '%';
-            
-            // Mostra percentuale se l'elemento lo supporta
-            if (normalizedProgress > 10) {
-                progressFill.textContent = Math.round(normalizedProgress) + '%';
-            } else {
-                progressFill.textContent = '';
-            }
-            
-            console.log(`Progress bar aggiornata: ${normalizedProgress}%`);
-        } else {
-            console.warn('Elemento progressFill non trovato');
-        }
-    } catch (error) {
-        console.error('Errore aggiornamento progress bar:', error);
-    }
-}
-
-// Verifica caricamento librerie
-function checkLibrariesLoaded() {
-    const libraries = {
-        XLSX: typeof XLSX !== 'undefined',
-        jsPDF: typeof window.jspdf !== 'undefined',
-        html2canvas: typeof html2canvas !== 'undefined',
-        JSZip: typeof JSZip !== 'undefined'
-    };
-    
-    console.log('Stato librerie esterne:', libraries);
-    
-    const missing = Object.keys(libraries).filter(lib => !libraries[lib]);
-    
-    if (missing.length > 0) {
-        console.error('Librerie mancanti:', missing);
-        const errorMsg = `Librerie non caricate: ${missing.join(', ')}\n\nRicarica la pagina. Se il problema persiste, controlla la connessione internet.`;
-        alert(errorMsg);
-        return false;
-    }
-    
-    console.log('Tutte le librerie esterne sono state caricate correttamente');
-    return true;
-}
-
-// Utility per trovare valori nelle colonne Excel
 function findColumnValue(row, columnNames) {
     if (!row || typeof row !== 'object') {
-        console.warn('findColumnValue: row non valido', row);
-        return null;
-    }
-    
-    if (!Array.isArray(columnNames)) {
-        console.warn('findColumnValue: columnNames deve essere un array', columnNames);
+        console.warn('findColumnValue ricevuto row non valido:', row);
         return null;
     }
     
     for (let colName of columnNames) {
-        if (row[colName] !== undefined && row[colName] !== null && row[colName] !== '') {
+        if (row[colName] !== undefined && row[colName] !== null) {
             return row[colName];
         }
     }
-    
     return null;
 }
 
-// Estrazione importo da movimento bancario
 function getImportoFromMovimento(movimento) {
-    if (!movimento || typeof movimento !== 'object') {
-        console.warn('getImportoFromMovimento: movimento non valido', movimento);
-        return 0;
-    }
-    
-    // Priorità agli ADDEBITI per le ricevute
-    const importoColumns = [
-        'ADDEBITI', 'Addebiti', 'ADDEBITO', 'Addebito',
-        'G', // Colonna G spesso usata per addebiti
-        'IMPORTO', 'Importo',
-        'ACCREDITI', 'Accrediti', 'ACCREDITO', 'Accredito',
-        'F' // Colonna F spesso usata per accrediti
-    ];
+    const importoColumns = ['IMPORTO', 'Importo', 'ADDEBITI', 'Addebiti', 'ADDEBITO', 'Addebito'];
     
     for (let col of importoColumns) {
         if (movimento[col] !== undefined && movimento[col] !== null) {
             let value = movimento[col];
-            
-            // Se è stringa, pulisci e converti
             if (typeof value === 'string') {
-                value = value.replace(/[^\d,.-]/g, '').replace(',', '.');
+                value = value.replace(/[^\d,-]/g, '').replace(',', '.');
             }
-            
-            const parsedValue = Math.abs(parseFloat(value)) || 0;
-            
-            if (parsedValue > 0) {
-                console.log(`Importo trovato in colonna ${col}:`, parsedValue);
-                return parsedValue;
-            }
+            return Math.abs(parseFloat(value)) || 0;
         }
     }
-    
-    console.warn('Nessun importo valido trovato nel movimento:', movimento);
     return 0;
 }
 
-// Estrazione data da movimento bancario
 function getDataFromMovimento(movimento) {
-    if (!movimento || typeof movimento !== 'object') {
-        console.warn('getDataFromMovimento: movimento non valido', movimento);
-        return new Date();
-    }
-    
-    const dateColumns = [
-        'DATA', 'Data', 'data',
-        'DATA VALUTA', 'Data Valuta', 'data_valuta',
-        'DATA OPERAZIONE', 'Data Operazione', 'data_operazione',
-        'DATA_CONTABILE', 'Data_Contabile'
-    ];
+    const dateColumns = ['DATA', 'Data', 'DATA VALUTA', 'Data Valuta', 'DATA OPERAZIONE', 'Data Operazione'];
     
     for (let col of dateColumns) {
         if (movimento[col]) {
             let dateValue = movimento[col];
             
-            // Se è già un oggetto Date
-            if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
-                return dateValue;
+            if (dateValue instanceof Date) return dateValue;
+            
+            if (typeof dateValue === 'number') {
+                const excelEpoch = new Date(1900, 0, 1);
+                const days = dateValue - 2;
+                return new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
             }
             
-            // Se è un numero (formato Excel seriale)
-            if (typeof dateValue === 'number' && dateValue > 0) {
-                try {
-                    // Formula per convertire data seriale Excel
-                    const excelEpoch = new Date(1900, 0, 1);
-                    const days = dateValue - 2; // Correzione per leap year bug Excel
-                    const converted = new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
-                    
-                    if (!isNaN(converted.getTime()) && converted.getFullYear() > 1900) {
-                        console.log(`Data convertita da Excel: ${dateValue} -> ${converted.toLocaleDateString('it-IT')}`);
-                        return converted;
-                    }
-                } catch (error) {
-                    console.warn('Errore conversione data Excel:', error);
+            if (typeof dateValue === 'string') {
+                const italianMatch = dateValue.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                if (italianMatch) {
+                    return new Date(italianMatch[3], italianMatch[2] - 1, italianMatch[1]);
                 }
-            }
-            
-            // Se è una stringa
-            if (typeof dateValue === 'string' && dateValue.trim()) {
-                try {
-                    // Formato italiano DD/MM/YYYY
-                    const italianMatch = dateValue.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-                    if (italianMatch) {
-                        const [, day, month, year] = italianMatch;
-                        const italianDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                        if (!isNaN(italianDate.getTime())) {
-                            return italianDate;
-                        }
-                    }
-                    
-                    // Formato ISO o altri formati standard
-                    const standardDate = new Date(dateValue);
-                    if (!isNaN(standardDate.getTime()) && standardDate.getFullYear() > 1900) {
-                        return standardDate;
-                    }
-                } catch (error) {
-                    console.warn('Errore parsing data stringa:', error);
+                
+                const parsed = new Date(dateValue);
+                if (!isNaN(parsed.getTime())) {
+                    return parsed;
                 }
             }
         }
     }
     
-    console.warn('Data non trovata o non valida, usando data corrente:', movimento);
     return new Date();
 }
 
-// Utility per debug - mostra struttura oggetto
+// Gestione tab
+function showTab(tabName) {
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    
+    const selectedTab = document.querySelector(`[onclick="showTab('${tabName}')"]`);
+    const selectedContent = document.getElementById(`${tabName}Tab`);
+    
+    if (selectedTab) selectedTab.classList.add('active');
+    if (selectedContent) selectedContent.classList.add('active');
+}
+
+// Progress bar legacy (mantenuta per compatibilità)
+function updateProgressBar(percentage) {
+    updateProgressInStep(percentage);
+}
+
+// Verifica librerie
+function checkLibrariesLoaded() {
+    const libraries = {
+        'XLSX': typeof XLSX !== 'undefined',
+        'jsPDF': typeof window.jspdf !== 'undefined',
+        'html2canvas': typeof html2canvas !== 'undefined',
+        'JSZip': typeof JSZip !== 'undefined'
+    };
+    
+    const missing = Object.entries(libraries)
+        .filter(([name, loaded]) => !loaded)
+        .map(([name]) => name);
+    
+    if (missing.length > 0) {
+        console.warn('📚 Librerie mancanti:', missing);
+        return false;
+    }
+    
+    console.log('✅ Tutte le librerie sono caricate');
+    return true;
+}
+
+// Debug utilities
 function debugObject(obj, name = 'Object') {
+    console.group(`🔍 Debug ${name}`);
+    console.log('Type:', typeof obj);
+    console.log('Value:', obj);
     if (typeof obj === 'object' && obj !== null) {
-        console.log(`${name} keys:`, Object.keys(obj));
-        console.log(`${name} sample:`, obj);
-    } else {
-        console.log(`${name}:`, obj);
+        console.log('Keys:', Object.keys(obj));
+        console.log('Length:', Array.isArray(obj) ? obj.length : 'N/A');
     }
+    console.groupEnd();
 }
 
-// Verifica integrità dati iscrizioni
 function validateIscrizioniData() {
-    if (!Array.isArray(iscrizioniData) || iscrizioniData.length === 0) {
-        console.error('Dati iscrizioni non validi o vuoti');
+    if (!iscrizioniData || !Array.isArray(iscrizioniData)) {
+        console.error('❌ iscrizioniData non valida');
         return false;
     }
     
-    let validRecords = 0;
-    iscrizioniData.forEach((record, index) => {
-        if (record.B && record.C && record.D) { // CF, Cognome, Nome
-            validRecords++;
-        } else {
-            console.warn(`Record iscrizione ${index} incompleto:`, record);
-        }
-    });
-    
-    console.log(`Iscrizioni valide: ${validRecords}/${iscrizioniData.length}`);
-    return validRecords > 0;
+    console.log(`✅ iscrizioniData valida: ${iscrizioniData.length} record`);
+    return true;
 }
 
-// Verifica integrità dati movimenti
 function validateMovimentiData() {
-    if (!Array.isArray(movimentiData) || movimentiData.length === 0) {
-        console.error('Dati movimenti non validi o vuoti');
+    if (!movimentiData || !Array.isArray(movimentiData)) {
+        console.error('❌ movimentiData non valida');
         return false;
     }
     
-    let validMovements = 0;
-    movimentiData.forEach((movimento, index) => {
-        const controparte = findColumnValue(movimento, ['CONTROPARTE', 'Controparte', 'controparte', 'C']);
-        const importo = getImportoFromMovimento(movimento);
-        
-        if (controparte && importo > 0) {
-            validMovements++;
-        } else {
-            console.warn(`Movimento ${index} incompleto o senza importo:`, movimento);
-        }
-    });
-    
-    console.log(`Movimenti validi: ${validMovements}/${movimentiData.length}`);
-    return validMovements > 0;
+    console.log(`✅ movimentiData valida: ${movimentiData.length} record`);
+    return true;
 }
 
-// Esposizione funzioni al contesto globale
-window.assignProgressiveNumbers = assignProgressiveNumbers; // NUOVO SISTEMA
-window.saveToLocalStorage = saveToLocalStorage;
-window.getNextReceiptNumber = getNextReceiptNumber;
-window.getCurrentReceiptNumber = getCurrentReceiptNumber;
-window.resetAllCounters = resetAllCounters;
-window.checkAndUpdateAnnualAmount = checkAndUpdateAnnualAmount;
-window.normalizeString = normalizeString;
-window.calculateSimilarity = calculateSimilarity;
-window.calculateRimborsoSpese = calculateRimborsoSpese;
-window.showTab = showTab;
-window.updateProgressBar = updateProgressBar;
-window.checkLibrariesLoaded = checkLibrariesLoaded;
-window.findColumnValue = findColumnValue;
-window.getImportoFromMovimento = getImportoFromMovimento;
-window.getDataFromMovimento = getDataFromMovimento;
-window.debugObject = debugObject;
-window.validateIscrizioniData = validateIscrizioniData;
-window.validateMovimentiData = validateMovimentiData;
+// Inizializzazione
+loadFromLocalStorage();
 
-// Variabili globali esposte
+// Esposizione globale delle funzioni e variabili
 window.iscrizioniData = iscrizioniData;
 window.movimentiData = movimentiData;
 window.results = results;
 window.numeroRicevutaPerCF = numeroRicevutaPerCF;
 window.importiAnnualiPerCF = importiAnnualiPerCF;
 
-// Debug - verifica che le funzioni siano esposte
-console.log('utils.js caricato - Funzioni esposte:', {
-    assignProgressiveNumbers: typeof window.assignProgressiveNumbers,
-    normalizeString: typeof window.normalizeString,
-    getCurrentReceiptNumber: typeof window.getCurrentReceiptNumber,
-    updateProgressBar: typeof window.updateProgressBar,
-    calculateRimborsoSpese: typeof window.calculateRimborsoSpese,
-    checkLibrariesLoaded: typeof window.checkLibrariesLoaded
-});
+// Progress bar system
+window.initProgressBar = initProgressBar;
+window.updateProgressStep = updateProgressStep;
+window.updateProgressInStep = updateProgressInStep;
+window.updateProgressDisplay = updateProgressDisplay;
+window.completeProgressBar = completeProgressBar;
 
-console.log('utils.js - Variabili globali inizializzate:', {
-    iscrizioniData: window.iscrizioniData.length,
-    movimentiData: window.movimentiData.length,
-    results: window.results.length,
-    numeroRicevutaPerCF: Object.keys(window.numeroRicevutaPerCF).length,
-    importiAnnualiPerCF: Object.keys(window.importiAnnualiPerCF).length
+// Numerazione
+window.assignProgressiveNumbers = assignProgressiveNumbers;
+window.getNextReceiptNumber = getNextReceiptNumber;
+window.getCurrentReceiptNumber = getCurrentReceiptNumber;
+window.resetAllCounters = resetAllCounters;
+
+// Utilities
+window.normalizeString = normalizeString;
+window.calculateSimilarity = calculateSimilarity;
+window.calculateRimborsoSpese = calculateRimborsoSpese;
+window.findColumnValue = findColumnValue;
+window.getImportoFromMovimento = getImportoFromMovimento;
+window.getDataFromMovimento = getDataFromMovimento;
+window.showTab = showTab;
+window.updateProgressBar = updateProgressBar;
+window.checkLibrariesLoaded = checkLibrariesLoaded;
+window.debugObject = debugObject;
+window.validateIscrizioniData = validateIscrizioniData;
+window.validateMovimentiData = validateMovimentiData;
+window.checkAndUpdateAnnualAmount = checkAndUpdateAnnualAmount;
+
+console.log('✅ utils.js caricato con sistema Progress Bar avanzato');
+console.log('📊 Funzioni progress disponibili:', {
+    initProgressBar: typeof window.initProgressBar,
+    updateProgressStep: typeof window.updateProgressStep,
+    updateProgressInStep: typeof window.updateProgressInStep,
+    completeProgressBar: typeof window.completeProgressBar
 });
