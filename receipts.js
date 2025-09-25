@@ -1,4 +1,4 @@
-// Generazione ricevute - VERSIONE SEMPLIFICATA
+// Generazione ricevute - CON SISTEMA NUMERAZIONE UNIFICATO
 function generateReceipts() {
     console.log('generateReceipts chiamata, results:', results);
     console.log('results.length:', results ? results.length : 'results undefined');
@@ -10,6 +10,9 @@ function generateReceipts() {
     }
     
     console.log('Inizio generazione ricevute per', results.length, 'elementi');
+    
+    // PRIMO PASSO: Assegna numeri progressivi cronologici
+    assignProgressiveNumbers();
     
     const container = document.getElementById('receiptsContainer');
     const previewContainer = document.getElementById('previewArea');
@@ -33,17 +36,9 @@ function generateReceipts() {
     let totalePrestazioni = 0;
     let totaleRimborsi = 0;
     
-    // Prima di elaborare le ricevute, assicurati che siano ordinate per data
-    results.sort((a, b) => {
-        // Ordina per anno e poi per mese
-        if (a.anno !== b.anno) {
-            return a.anno - b.anno;
-        }
-        return a.mese - b.mese;
-    });
-    
-    console.log('Results ordinati per data prima della generazione:', 
-        results.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome}`));
+    // I results sono già ordinati dalla funzione assignProgressiveNumbers()
+    console.log('Results elaborazione:', 
+        results.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome} - Numero: ${r.numeroProgressivo}`));
     
     results.forEach((person, index) => {
         // Controllo limite €2.500
@@ -66,11 +61,11 @@ function generateReceipts() {
             });
         }
         
-        const receipt = generateReceipt(person);
+        // Genera ricevuta HTML usando il numero progressivo unificato
+        const receipt = createReceiptHTML(person, person.numeroProgressivo, getReceiptDate(person.anno, person.mese));
         container.innerHTML += receipt;
         
         // Anteprima con dettagli movimenti
-        const numeroRicevuta = getCurrentReceiptNumber(cfKey);
         const previewItem = document.createElement('div');
         previewItem.style.cssText = 'border: 1px solid #dee2e6; padding: 15px; margin: 15px 0; background: #f8f9fa; border-radius: 8px;';
         
@@ -95,7 +90,7 @@ function generateReceipts() {
             <div style="display: grid; grid-template-columns: 1fr 200px; gap: 15px; align-items: start;">
                 <div>
                     <h4 style="margin: 0 0 10px 0; color: #495057;">
-                        #${numeroRicevuta} - ${person.nome} ${person.cognome}
+                        #${person.numeroProgressivo} - ${person.nome} ${person.cognome}
                     </h4>
                     <div style="font-size: 14px; line-height: 1.6;">
                         <strong>CF:</strong> ${person.codiceFiscale}<br>
@@ -195,33 +190,31 @@ function generateReceipts() {
     alert(`✅ Generazione completata!\n\n${results.length} ricevute HTML create.\nRisparmio fiscale totale: €${(totaleRimborsi * 0.2).toFixed(2)}\n\nI pulsanti di export sono ora attivi.`);
 }
 
-// Generazione HTML ricevuta singola - UGUALE ALL'ORIGINALE
-function generateReceipt(person) {
-    // Data ricevuta = ultimo giorno del mese del pagamento
-    const lastDayOfMonth = new Date(person.anno, person.mese, 0); // 0 = ultimo giorno del mese precedente, quindi person.mese è corretto
-    const dateStr = lastDayOfMonth.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    
-    console.log(`Ricevuta per ${person.nome} ${person.cognome} - Mese: ${person.mese}/${person.anno} - Data ricevuta: ${dateStr}`);
+// Utility per calcolare data ricevuta (ultimo giorno del mese)
+function getReceiptDate(anno, mese) {
+    const lastDayOfMonth = new Date(anno, mese, 0);
+    return lastDayOfMonth.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// Generazione HTML ricevuta singola - USA NUMERAZIONE PASSATA COME PARAMETRO
+function createReceiptHTML(person, numeroRicevuta, dataRicevuta) {
+    console.log(`Creazione HTML per ${person.nome} ${person.cognome} - Numero: ${numeroRicevuta} - Data: ${dataRicevuta}`);
     
     const ritenuta = person.compenso * 0.20;
     const compensoNetto = person.compenso - ritenuta;
     const nettoPagare = compensoNetto + person.rimborsoSpese;
     const needsStamp = person.compenso > 77.47;
     
-    // Ottieni numero progressivo
-    const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
-    const numeroRicevuta = getNextReceiptNumber(cfKey);
-    
     // Template HTML ricevuta - formato identico all'originale
     if (person.rimborsoSpese === 0) {
         // Ricevuta SENZA rimborso spese
         return `
-            <div class="ricevuta">
+            <div class="ricevuta" id="receipt-${results.indexOf(person)}">
                 <div class="ricevuta-header">
                     <div style="text-align: left; margin-bottom: 30px;">
                         <strong>${person.nome} ${person.cognome}</strong><br>
                         ${person.indirizzo}<br>
-                        ${person.cap} — ${person.citta} — ${person.provincia}<br>
+                        ${person.cap} – ${person.citta} – ${person.provincia}<br>
                         ${person.codiceFiscale}
                     </div>
                 </div>
@@ -233,12 +226,12 @@ function generateReceipt(person) {
                         <strong>SPETT.LE</strong><br>
                         OKL SRL<br>
                         VIA MONTE PASUBIO 222/1<br>
-                        36010 — ZANE' — (VI)<br>
+                        36010 – ZANE' – (VI)<br>
                         P.I. 04433920248
                     </div>
                     <div style="text-align: right;">
                         <strong>RICEVUTA NUM: ${numeroRicevuta}</strong><br>
-                        <strong>DATA: ${dateStr}</strong>
+                        <strong>DATA: ${dataRicevuta}</strong>
                     </div>
                 </div>
                 
@@ -299,12 +292,12 @@ function generateReceipt(person) {
     } else {
         // Ricevuta CON rimborso spese
         return `
-            <div class="ricevuta">
+            <div class="ricevuta" id="receipt-${results.indexOf(person)}">
                 <div class="ricevuta-header">
                     <div style="text-align: left; margin-bottom: 30px;">
                         <strong>${person.nome} ${person.cognome}</strong><br>
                         ${person.indirizzo}<br>
-                        ${person.cap} — ${person.citta} — ${person.provincia}<br>
+                        ${person.cap} – ${person.citta} – ${person.provincia}<br>
                         ${person.codiceFiscale}
                     </div>
                 </div>
@@ -316,12 +309,12 @@ function generateReceipt(person) {
                         <strong>SPETT.LE</strong><br>
                         OKL SRL<br>
                         VIA MONTE PASUBIO 222/1<br>
-                        36010 — ZANE' — (VI)<br>
+                        36010 – ZANE' – (VI)<br>
                         P.I. 04433920248
                     </div>
                     <div style="text-align: right;">
                         <strong>RICEVUTA NUM: ${numeroRicevuta}</strong><br>
-                        <strong>DATA: ${dateStr}</strong>
+                        <strong>DATA: ${dataRicevuta}</strong>
                     </div>
                 </div>
                 
@@ -390,6 +383,17 @@ function generateReceipt(person) {
     }
 }
 
+// Funzione compatibilità con il vecchio sistema
+function generateReceipt(person) {
+    const numeroRicevuta = person.numeroProgressivo || getCurrentReceiptNumber(person.codiceFiscale || `${person.nome}_${person.cognome}`);
+    const dataRicevuta = getReceiptDate(person.anno, person.mese);
+    return createReceiptHTML(person, numeroRicevuta, dataRicevuta);
+}
+
 // Esposizione funzioni al contesto globale
 window.generateReceipts = generateReceipts;
-window.generateReceipt = generateReceipt;
+window.generateReceipt = generateReceipt; // Compatibilità
+window.createReceiptHTML = createReceiptHTML;
+window.getReceiptDate = getReceiptDate;
+
+console.log('receipts.js caricato - Sistema numerazione unificato implementato');
