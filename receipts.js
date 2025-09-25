@@ -185,8 +185,11 @@ function generateReceipts() {
 
 // Generazione HTML ricevuta singola - UGUALE ALL'ORIGINALE
 function generateReceipt(person) {
-    const today = new Date();
-    const dateStr = today.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    // Data ricevuta = ultimo giorno del mese del pagamento
+    const lastDayOfMonth = new Date(person.anno, person.mese, 0); // 0 = ultimo giorno del mese precedente, quindi person.mese è corretto
+    const dateStr = lastDayOfMonth.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    console.log(`Ricevuta per ${person.nome} ${person.cognome} - Mese: ${person.mese}/${person.anno} - Data ricevuta: ${dateStr}`);
     
     const ritenuta = person.compenso * 0.20;
     const compensoNetto = person.compenso - ritenuta;
@@ -217,7 +220,7 @@ function generateReceipt(person) {
                     <div>
                         <strong>SPETT.LE</strong><br>
                         OKL SRL<br>
-                        VIA MONTE PASUBIO<br>
+                        VIA MONTE PASUBIO 222/1<br>
                         36010 — ZANE' — (VI)<br>
                         P.I. 04433920248
                     </div>
@@ -300,7 +303,7 @@ function generateReceipt(person) {
                     <div>
                         <strong>SPETT.LE</strong><br>
                         OKL SRL<br>
-                        VIA MONTE PASUBIO<br>
+                        VIA MONTE PASUBIO 222/1<br>
                         36010 — ZANE' — (VI)<br>
                         P.I. 04433920248
                     </div>
