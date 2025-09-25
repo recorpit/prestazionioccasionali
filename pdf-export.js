@@ -104,7 +104,7 @@ async function generatePDFPreviews() {
             moreDiv.innerHTML = `
                 <strong>Anteprima limitata</strong><br>
                 Mostrate ${maxPreviews} di ${results.length} ricevute.<br>
-                Tutte le ${results.length} ricevute saranno incluse nel download ZIP.
+                Tutte le ${results.length} ricevute saranno incluse nel download ZIP per mese.
             `;
             pdfPreviewArea.appendChild(moreDiv);
         }
@@ -133,155 +133,7 @@ async function generatePDFPreviews() {
     }
 }
 
-// Creazione ZIP con PDF tutti insieme - CON NUMERAZIONE UNIFICATA
-async function createZipWithPDFs() {
-    if (results.length === 0) {
-        alert('Prima devi eseguire il matching e generare le ricevute!');
-        return;
-    }
-
-    if (!checkPDFLibraries()) return;
-
-    // Calcola totali rimborsi e risparmio fiscale
-    const totaleRimborsi = results.reduce((sum, person) => sum + person.rimborsoSpese, 0);
-    const risparmioFiscale = totaleRimborsi * 0.20;
-    
-    const conferma = confirm(
-        `RIEPILOGO RIMBORSI SPESE\n\n` +
-        `• Totale rimborsi spese: € ${totaleRimborsi.toFixed(2)}\n` +
-        `• Risparmio fiscale (20%): € ${risparmioFiscale.toFixed(2)}\n\n` +
-        `Procedere con la generazione del ZIP PDF?`
-    );
-    
-    if (!conferma) return;
-
-    const btn = document.getElementById('downloadBtn');
-    btn.innerHTML = '⏳ Generazione ZIP in corso...';
-    btn.disabled = true;
-    document.getElementById('progressBar').style.display = 'block';
-
-    try {
-        console.log('Inizio generazione ZIP PDF...');
-        
-        const zip = new JSZip();
-        const folder = zip.folder("Ricevute");
-        const receiptsElements = document.querySelectorAll('.ricevuta');
-
-        console.log(`Trovate ${receiptsElements.length} ricevute da convertire`);
-
-        for (let index = 0; index < results.length && index < receiptsElements.length; index++) {
-            const person = results[index];
-            const receiptElement = receiptsElements[index];
-            
-            console.log(`Processando ricevuta ${index + 1}/${results.length}: ${person.nome} ${person.cognome}`);
-            
-            try {
-                const canvas = await html2canvas(receiptElement, {
-                    scale: 2,
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                    useCORS: true,
-                    allowTaint: false,
-                    width: receiptElement.scrollWidth,
-                    height: receiptElement.scrollHeight,
-                    windowWidth: 1200,
-                    windowHeight: 1600
-                });
-                
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
-                });
-                
-                const imgData = canvas.toDataURL('image/png', 0.95);
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                
-                let imgWidth = pdfWidth - 20;
-                let imgHeight = (canvas.height * imgWidth) / canvas.width;
-                
-                if (imgHeight > pdfHeight - 20) {
-                    imgHeight = pdfHeight - 20;
-                    imgWidth = (canvas.width * imgHeight) / canvas.height;
-                }
-                
-                const x = (pdfWidth - imgWidth) / 2;
-                const y = 10;
-                
-                pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-                
-                // USA LA NUMERAZIONE UNIFICATA PER IL NOME FILE
-                const numeroRicevuta = person.numeroProgressivo;
-                const fileName = `${person.nome}_${person.cognome}_${numeroRicevuta}.pdf`
-                    .replace(/\s+/g, '_')
-                    .replace(/[^a-zA-Z0-9_\-\.]/g, '');
-                
-                const pdfBlob = pdf.output('blob');
-                folder.file(fileName, pdfBlob);
-                
-                console.log(`PDF creato: ${fileName} (Numero unificato: ${numeroRicevuta})`);
-                
-                const progress = ((index + 1) / results.length) * 90;
-                updateProgressBar(progress);
-                
-                await new Promise(resolve => setTimeout(resolve, 100));
-                
-            } catch (pdfError) {
-                console.error(`Errore nella generazione PDF ${index}:`, pdfError);
-            }
-        }
-        
-        console.log('Generazione ZIP finale...');
-        updateProgressBar(95);
-        
-        const content = await zip.generateAsync({
-            type: "blob",
-            compression: "DEFLATE",
-            compressionOptions: { level: 6 }
-        });
-        
-        updateProgressBar(100);
-        
-        const url = URL.createObjectURL(content);
-        const currentDate = new Date().toISOString().split('T')[0];
-        
-        const downloadArea = document.getElementById('downloadArea');
-        downloadArea.innerHTML = `
-            <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
-                <h4 style="color: #155724; margin-bottom: 10px;">✅ ZIP generato con successo!</h4>
-                <p>Contiene ${results.length} ricevute PDF con numerazione cronologica corretta</p>
-                <a href="${url}" download="Ricevute_${currentDate}.zip" 
-                   style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
-                   📥 Clicca qui per scaricare il file ZIP
-                </a>
-            </div>
-        `;
-        
-        console.log('ZIP PDF generato con successo!');
-        downloadArea.scrollIntoView({ behavior: 'smooth' });
-
-    } catch (error) {
-        console.error('Errore nella generazione ZIP:', error);
-        
-        const downloadArea = document.getElementById('downloadArea');
-        downloadArea.innerHTML = `
-            <div class="error-box">
-                <h4>Errore nella generazione PDF</h4>
-                <p>Dettagli: ${error.message}</p>
-                <p>Prova a ricaricare la pagina e ripetere l'operazione.</p>
-            </div>
-        `;
-    } finally {
-        btn.innerHTML = 'Crea ZIP con PDF (Tutti)';
-        btn.disabled = false;
-        document.getElementById('progressBar').style.display = 'none';
-        updateProgressBar(0);
-    }
-}
-
-// Creazione ZIP con PDF divisi per mese - CON NUMERAZIONE UNIFICATA
+// Creazione ZIP con PDF divisi per mese - CON SELEZIONE
 async function createZipWithPDFsByMonth() {
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -318,12 +170,13 @@ async function createZipWithPDFsByMonth() {
     const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
                      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
     
-    let opzioniMesi = 'Seleziona il mese da esportare:\n\n';
+    let opzioniMesi = 'EXPORT PDF - Seleziona il mese da esportare:\n\n';
     mesiDisponibili.forEach((meseAnno, index) => {
         const [anno, mese] = meseAnno.split('-');
         const nomeCompleto = `${mesiNomi[parseInt(mese)]} ${anno}`;
         const numRicevute = ricevutePerMese[meseAnno].length;
-        opzioniMesi += `${index + 1}. ${nomeCompleto} (${numRicevute} ricevute)\n`;
+        const rimborsiMese = ricevutePerMese[meseAnno].reduce((sum, item) => sum + item.person.rimborsoSpese, 0);
+        opzioniMesi += `${index + 1}. ${nomeCompleto} (${numRicevute} ricevute, €${rimborsiMese.toFixed(2)} rimborsi)\n`;
     });
     
     opzioniMesi += '\n0. Esporta TUTTI i mesi\n';
@@ -483,7 +336,7 @@ async function exportPDFForMonth(meseAnno, ricevuteMese) {
             </div>
         `;
     } finally {
-        btn.innerHTML = 'Crea ZIP PDF per Mese';
+        btn.innerHTML = 'ZIP PDF per Mese';
         btn.disabled = false;
         document.getElementById('progressBar').style.display = 'none';
         updateProgressBar(0);
@@ -517,26 +370,150 @@ async function exportAllMonthsPDF(ricevutePerMese) {
     
     if (!conferma) return;
 
+    let filesCreated = 0;
+    
     for (const [meseAnno, ricevuteMese] of Object.entries(ricevutePerMese)) {
         await exportPDFForMonth(meseAnno, ricevuteMese);
+        filesCreated++;
+        
         // Pausa tra i download per non sovraccaricare il browser
-        await new Promise(resolve => setTimeout(resolve, 500));
+        if (filesCreated < Object.keys(ricevutePerMese).length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
     }
     
-    alert(`Completato! Generati ${Object.keys(ricevutePerMese).length} file ZIP con numerazione cronologica corretta.`);
+    alert(`✅ Completato! Generati ${filesCreated} file ZIP con numerazione cronologica corretta.`);
 }
 
-// Esposizione IMMEDIATA funzioni al contesto globale
-window.generatePDFPreviews = generatePDFPreviews;
-window.createZipWithPDFs = createZipWithPDFs;
-window.createZipWithPDFsByMonth = createZipWithPDFsByMonth;
-window.checkPDFLibraries = checkPDFLibraries;
+// Creazione ZIP con PDF - MANTIENE COMPATIBILITA'
+async function createZipWithPDFs() {
+    console.log('Redirect a export per mese...');
+    await createZipWithPDFsByMonth();
+}
 
-// Debug IMMEDIATO - verifica che le funzioni siano esposte
-console.log('🔍 pdf-export.js CARICATO - Verifico esposizione funzioni...');
-console.log('generatePDFPreviews:', typeof window.generatePDFPreviews);
-console.log('createZipWithPDFs:', typeof window.createZipWithPDFs);
-console.log('createZipWithPDFsByMonth:', typeof window.createZipWithPDFsByMonth);
+// Utility avanzata per gestione errori PDF
+function handlePDFError(error, context = 'PDF generation') {
+    console.error(`Errore in ${context}:`, error);
+    
+    let errorMessage = `Errore durante ${context}:\n\n`;
+    
+    if (error.name === 'SecurityError') {
+        errorMessage += `Errore di sicurezza - possibili cause:\n• Contenuto bloccato dal browser\n• CORS policy violation\n• Script non autorizzati`;
+    } else if (error.message.includes('canvas')) {
+        errorMessage += `Errore rendering canvas:\n• Elemento ricevuta non trovato\n• Dimensioni canvas troppo grandi\n• Memoria insufficiente`;
+    } else if (error.message.includes('jsPDF')) {
+        errorMessage += `Errore libreria jsPDF:\n• Libreria non caricata correttamente\n• Versione incompatibile\n• Problema inizializzazione PDF`;
+    } else {
+        errorMessage += `Dettagli tecnici: ${error.message}`;
+    }
+    
+    errorMessage += `\n\nSoluzioni:\n1. Ricarica la pagina con Ctrl+F5\n2. Prova con meno ricevute alla volta\n3. Chiudi altre schede del browser\n4. Controlla la console (F12) per dettagli`;
+    
+    return errorMessage;
+}
+
+// Ottimizzazione canvas per ridurre problemi di memoria
+function optimizeCanvas(element, options = {}) {
+    const defaultOptions = {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        allowTaint: false,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        windowWidth: 1200,
+        windowHeight: 1600,
+        // Ottimizzazioni per memory
+        removeContainer: false,
+        onclone: function(clonedDoc) {
+            // Rimuovi elementi non necessari dal clone
+            const images = clonedDoc.querySelectorAll('img');
+            images.forEach(img => {
+                if (img.src.startsWith('data:')) {
+                    // Mantieni immagini data: ma ottimizza
+                    if (img.naturalWidth > 800) {
+                        img.style.maxWidth = '800px';
+                    }
+                }
+            });
+        }
+    };
+    
+    return { ...defaultOptions, ...options };
+}
+
+// Verifica memoria disponibile
+function checkMemoryAvailability() {
+    try {
+        // Stima approssimativa della memoria disponibile
+        if (performance.memory) {
+            const used = performance.memory.usedJSHeapSize;
+            const limit = performance.memory.jsHeapSizeLimit;
+            const available = limit - used;
+            const availableMB = Math.round(available / 1024 / 1024);
+            
+            console.log(`Memoria JS disponibile: ~${availableMB}MB`);
+            
+            if (availableMB < 50) {
+                return {
+                    available: false,
+                    message: `Memoria JS bassa (~${availableMB}MB). Chiudi altre schede o riduci il numero di ricevute.`
+                };
+            }
+        }
+        return { available: true };
+    } catch (e) {
+        console.warn('Impossibile controllare la memoria:', e);
+        return { available: true }; // Assumi disponibile se non controllabile
+    }
+}
+
+// Utility per cleanup dopo generazione PDF
+function cleanupAfterPDF() {
+    try {
+        // Forza garbage collection (se disponibile)
+        if (window.gc) {
+            window.gc();
+        }
+        
+        // Cleanup manuale di variabili pesanti
+        const heavyVars = ['canvas', 'imgData', 'pdfBlob'];
+        heavyVars.forEach(varName => {
+            if (window[varName]) {
+                delete window[varName];
+            }
+        });
+        
+        console.log('Cleanup post-PDF completato');
+    } catch (e) {
+        console.warn('Errore durante cleanup:', e);
+    }
+}
+
+// Esposizione funzioni al contesto globale
+window.generatePDFPreviews = generatePDFPreviews;
+window.createZipWithPDFs = createZipWithPDFs; // Mantiene compatibilità
+window.createZipWithPDFsByMonth = createZipWithPDFsByMonth;
+window.exportPDFForMonth = exportPDFForMonth;
+window.exportAllMonthsPDF = exportAllMonthsPDF;
+window.checkPDFLibraries = checkPDFLibraries;
+window.handlePDFError = handlePDFError;
+window.optimizeCanvas = optimizeCanvas;
+window.checkMemoryAvailability = checkMemoryAvailability;
+window.cleanupAfterPDF = cleanupAfterPDF;
+
+// Debug - verifica che le funzioni siano esposte
+console.log('🔍 pdf-export.js CARICATO - Export per mese con utilities avanzate...');
+console.log('Funzioni esposte:', {
+    generatePDFPreviews: typeof window.generatePDFPreviews,
+    createZipWithPDFs: typeof window.createZipWithPDFs,
+    createZipWithPDFsByMonth: typeof window.createZipWithPDFsByMonth,
+    exportPDFForMonth: typeof window.exportPDFForMonth,
+    handlePDFError: typeof window.handlePDFError,
+    optimizeCanvas: typeof window.optimizeCanvas,
+    checkMemoryAvailability: typeof window.checkMemoryAvailability
+});
 
 if (typeof window.generatePDFPreviews !== 'function') {
     console.error('❌ ERRORE: generatePDFPreviews non è esposta correttamente!');
@@ -544,10 +521,10 @@ if (typeof window.generatePDFPreviews !== 'function') {
     console.log('✅ generatePDFPreviews esposta correttamente');
 }
 
-if (typeof window.createZipWithPDFs !== 'function') {
-    console.error('❌ ERRORE: createZipWithPDFs non è esposta correttamente!');
+if (typeof window.createZipWithPDFsByMonth !== 'function') {
+    console.error('❌ ERRORE: createZipWithPDFsByMonth non è esposta correttamente!');
 } else {
-    console.log('✅ createZipWithPDFs esposta correttamente - Numerazione unificata implementata');
+    console.log('✅ createZipWithPDFsByMonth esposta correttamente - Export per mese con utilities implementato');
 }
 
-console.log('✅ pdf-export.js caricato completamente con numerazione unificata');
+console.log('✅ pdf-export.js caricato completamente - Export per mese con gestione errori avanzata e ottimizzazioni');
