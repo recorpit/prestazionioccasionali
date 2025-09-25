@@ -30,6 +30,17 @@ function exportToExcel() {
 
         console.log(`Esportando ${results.length} ricevute in Excel...`);
 
+        // ORDINAMENTO CRUCIALE: Ordina i results per data prima dell'export
+        const resultsOrdinati = [...results].sort((a, b) => {
+            if (a.anno !== b.anno) {
+                return a.anno - b.anno;
+            }
+            return a.mese - b.mese;
+        });
+        
+        console.log('Export Excel - Results ordinati per data:', 
+            resultsOrdinati.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome}`));
+
         // Prepara dati Excel con intestazione a 28 colonne
         const excelData = [];
         
@@ -65,8 +76,8 @@ function exportToExcel() {
             'Esigibilita\' IVA'      // 28
         ]);
 
-        // Elabora ogni ricevuta
-        results.forEach((person, index) => {
+        // Elabora ogni ricevuta NELL'ORDINE CORRETTO
+        resultsOrdinati.forEach((person, index) => {
             try {
                 const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
                 const receiptNumber = getCurrentReceiptNumber(cfKey);
@@ -224,10 +235,18 @@ function exportToExcelByMonth() {
         
         if (!conferma) return;
 
-        // Raggruppa le ricevute per mese
+        // Raggruppa le ricevute per mese CON ORDINAMENTO
         const ricevutePerMese = {};
         
-        results.forEach(person => {
+        // Prima ordina tutti i results per data
+        const resultsOrdinatiPerMese = [...results].sort((a, b) => {
+            if (a.anno !== b.anno) {
+                return a.anno - b.anno;
+            }
+            return a.mese - b.mese;
+        });
+        
+        resultsOrdinatiPerMese.forEach(person => {
             // Crea chiave mese nel formato YYYY-MM
             const chiaveMese = `${person.anno}-${person.mese.toString().padStart(2, '0')}`;
             if (!ricevutePerMese[chiaveMese]) {
