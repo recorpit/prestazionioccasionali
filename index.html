@@ -166,56 +166,19 @@
     
     <div id="receiptsContainer"></div>
     
-    <!-- Scripts - Carica utils.js per primo per evitare problemi di dipendenze -->
+    <!-- Scripts - Caricamento sequenziale sincrono -->
     <script src="utils.js"></script>
+    <script src="matching.js"></script>
+    <script src="receipts.js"></script>
+    <script src="pdf-export.js"></script>
+    <script src="excel-export.js"></script>
+    
     <script>
-        // Attende che utils.js sia completamente caricato prima di procedere
-        function waitForUtils() {
-            return new Promise((resolve) => {
-                if (typeof normalizeString === 'function' && 
-                    typeof getCurrentReceiptNumber === 'function' && 
-                    typeof updateProgressBar === 'function') {
-                    resolve();
-                } else {
-                    setTimeout(() => waitForUtils().then(resolve), 50);
-                }
-            });
-        }
-        
-        // Carica gli altri script dopo utils.js
-        waitForUtils().then(() => {
-            const scripts = [
-                'matching.js',
-                'receipts.js', 
-                'pdf-export.js',
-                'excel-export.js'
-            ];
-            
-            let loadedScripts = 0;
-            
-            scripts.forEach((scriptSrc, index) => {
-                const script = document.createElement('script');
-                script.src = scriptSrc;
-                script.async = false; // Mantiene l'ordine di esecuzione
-                script.onload = () => {
-                    loadedScripts++;
-                    console.log(`Caricato: ${scriptSrc}`);
-                    
-                    // Quando tutti i script sono caricati
-                    if (loadedScripts === scripts.length) {
-                        console.log('Tutti i moduli JavaScript sono stati caricati');
-                        checkAllFunctions();
-                    }
-                };
-                script.onerror = () => {
-                    console.error(`Errore nel caricamento di: ${scriptSrc}`);
-                };
-                document.head.appendChild(script);
-            });
-        });
-        
+        // Verifica funzioni dopo il caricamento di tutti i file
         function checkAllFunctions() {
             const functions = [
+                'loadIscrizioni',
+                'loadMovimenti',
                 'performMatching',
                 'generateReceipts', 
                 'generatePDFPreviews',
@@ -226,14 +189,33 @@
                 'resetAllCounters'
             ];
             
+            console.log('Controllo funzioni...');
             const missing = functions.filter(func => typeof window[func] !== 'function');
             
             if (missing.length > 0) {
-                console.error('Funzioni mancanti:', missing);
+                console.error('❌ Funzioni mancanti:', missing);
+                
+                // Prova a ricontrollare dopo un breve timeout
+                setTimeout(() => {
+                    console.log('Secondo controllo funzioni...');
+                    const stillMissing = functions.filter(func => typeof window[func] !== 'function');
+                    if (stillMissing.length > 0) {
+                        console.error('❌ Funzioni ancora mancanti dopo timeout:', stillMissing);
+                        alert('Errore caricamento sistema. Ricarica la pagina (F5).');
+                    } else {
+                        console.log('✅ Tutte le funzioni sono ora disponibili (secondo controllo)');
+                    }
+                }, 1000);
             } else {
                 console.log('✅ Tutte le funzioni sono disponibili');
             }
         }
+        
+        // Controlla le funzioni quando tutto è caricato
+        window.addEventListener('load', () => {
+            console.log('Pagina completamente caricata, verifico funzioni...');
+            setTimeout(checkAllFunctions, 100);
+        });
     </script>
     
     <script>
