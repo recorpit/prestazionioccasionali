@@ -59,9 +59,9 @@ async function generatePDFPreviews() {
                 height: receiptElement.scrollHeight
             });
             
-            const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
-            const receiptNumber = getCurrentReceiptNumber(cfKey);
-            const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`;
+            // USA LA NUMERAZIONE UNIFICATA
+            const numeroRicevuta = person.numeroProgressivo;
+            const fileName = `${person.nome}_${person.cognome}_${numeroRicevuta}.pdf`;
             
             const previewDiv = document.createElement('div');
             previewDiv.style.cssText = 'border: 2px solid #ddd; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;';
@@ -83,7 +83,7 @@ async function generatePDFPreviews() {
                         <div style="font-size: 14px; line-height: 1.5;">
                             <strong>Nome:</strong> ${person.nome} ${person.cognome}<br>
                             <strong>CF:</strong> ${person.codiceFiscale}<br>
-                            <strong>Numero ricevuta:</strong> ${receiptNumber}<br>
+                            <strong>Numero ricevuta:</strong> ${numeroRicevuta}<br>
                             <strong>Compenso lordo:</strong> € ${person.compenso.toFixed(2)}<br>
                             ${person.rimborsoSpese > 0 ? `<strong>Rimborso spese:</strong> € ${person.rimborsoSpese.toFixed(2)}<br>` : ''}
                             <strong>Netto a pagare:</strong> € ${(person.compenso * 0.8 + person.rimborsoSpese).toFixed(2)}
@@ -117,23 +117,14 @@ async function generatePDFPreviews() {
             </div>
         `;
     } finally {
-        btn.innerHTML = 'Anteprima PDF';
+        btn.innerHTML = 'Crea ZIP con PDF (Tutti)';
         btn.disabled = false;
-        
-        // Attiva automaticamente il tab anteprima PDF
-        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        
-        const pdfTab = document.querySelectorAll('.tab')[2];
-        if (pdfTab) {
-            pdfTab.classList.add('active');
-            document.getElementById('pdfpreviewTab').classList.add('active');
-            pdfPreviewArea.scrollIntoView({ behavior: 'smooth' });
-        }
+        document.getElementById('progressBar').style.display = 'none';
+        updateProgressBar(0);
     }
 }
 
-// Creazione ZIP con PDF divisi per mese
+// Creazione ZIP con PDF divisi per mese - CON NUMERAZIONE UNIFICATA
 async function createZipWithPDFsByMonth() {
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -198,7 +189,7 @@ async function createZipWithPDFsByMonth() {
     }
 }
 
-// Esporta PDF per un mese specifico
+// Esporta PDF per un mese specifico - CON NUMERAZIONE UNIFICATA
 async function exportPDFForMonth(meseAnno, ricevuteMese) {
     const [anno, mese] = meseAnno.split('-');
     const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
@@ -274,14 +265,16 @@ async function exportPDFForMonth(meseAnno, ricevuteMese) {
                 
                 pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
                 
-                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
-                const receiptNumber = getCurrentReceiptNumber(cfKey);
-                const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`
+                // USA LA NUMERAZIONE UNIFICATA PER IL NOME FILE
+                const numeroRicevuta = person.numeroProgressivo;
+                const fileName = `${person.nome}_${person.cognome}_${numeroRicevuta}.pdf`
                     .replace(/\s+/g, '_')
                     .replace(/[^a-zA-Z0-9_\-\.]/g, '');
                 
                 const pdfBlob = pdf.output('blob');
                 folder.file(fileName, pdfBlob);
+                
+                console.log(`PDF creato: ${fileName} (Numero unificato: ${numeroRicevuta})`);
                 
                 const progress = ((i + 1) / ricevuteMese.length) * 90;
                 updateProgressBar(progress);
@@ -311,7 +304,7 @@ async function exportPDFForMonth(meseAnno, ricevuteMese) {
         downloadArea.innerHTML = `
             <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
                 <h4 style="color: #155724; margin-bottom: 10px;">✅ ZIP generato con successo!</h4>
-                <p><strong>${nomeCompleto}</strong> - ${ricevuteMese.length} ricevute PDF</p>
+                <p><strong>${nomeCompleto}</strong> - ${ricevuteMese.length} ricevute PDF con numerazione corretta</p>
                 <a href="${url}" download="${fileName}" 
                    style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
                    📥 Scarica ${fileName}
@@ -373,10 +366,48 @@ async function exportAllMonthsPDF(ricevutePerMese) {
         await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    alert(`Completato! Generati ${Object.keys(ricevutePerMese).length} file ZIP.`);
+    alert(`Completato! Generati ${Object.keys(ricevutePerMese).length} file ZIP con numerazione cronologica corretta.`);
 }
 
-// Funzione originale createZipWithPDFs mantenuta per compatibilità 
+// Esposizione IMMEDIATA funzioni al contesto globale
+window.generatePDFPreviews = generatePDFPreviews;
+window.createZipWithPDFs = createZipWithPDFs;
+window.createZipWithPDFsByMonth = createZipWithPDFsByMonth;
+window.checkPDFLibraries = checkPDFLibraries;
+
+// Debug IMMEDIATO - verifica che le funzioni siano esposte
+console.log('🔍 pdf-export.js CARICATO - Verifico esposizione funzioni...');
+console.log('generatePDFPreviews:', typeof window.generatePDFPreviews);
+console.log('createZipWithPDFs:', typeof window.createZipWithPDFs);
+console.log('createZipWithPDFsByMonth:', typeof window.createZipWithPDFsByMonth);
+
+if (typeof window.generatePDFPreviews !== 'function') {
+    console.error('❌ ERRORE: generatePDFPreviews non è esposta correttamente!');
+} else {
+    console.log('✅ generatePDFPreviews esposta correttamente');
+}
+
+if (typeof window.createZipWithPDFs !== 'function') {
+    console.error('❌ ERRORE: createZipWithPDFs non è esposta correttamente!');
+} else {
+    console.log('✅ createZipWithPDFs esposta correttamente - Numerazione unificata implementata');
+}.innerHTML = 'Anteprima PDF';
+        btn.disabled = false;
+        
+        // Attiva automaticamente il tab anteprima PDF
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        const pdfTab = document.querySelectorAll('.tab')[2];
+        if (pdfTab) {
+            pdfTab.classList.add('active');
+            document.getElementById('pdfpreviewTab').classList.add('active');
+            pdfPreviewArea.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+}
+
+// Creazione ZIP con PDF tutti insieme - CON NUMERAZIONE UNIFICATA
 async function createZipWithPDFs() {
     if (results.length === 0) {
         alert('Prima devi eseguire il matching e generare le ricevute!');
@@ -455,14 +486,16 @@ async function createZipWithPDFs() {
                 
                 pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
                 
-                const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
-                const receiptNumber = getCurrentReceiptNumber(cfKey);
-                const fileName = `${person.nome}_${person.cognome}_${receiptNumber}.pdf`
+                // USA LA NUMERAZIONE UNIFICATA PER IL NOME FILE
+                const numeroRicevuta = person.numeroProgressivo;
+                const fileName = `${person.nome}_${person.cognome}_${numeroRicevuta}.pdf`
                     .replace(/\s+/g, '_')
                     .replace(/[^a-zA-Z0-9_\-\.]/g, '');
                 
                 const pdfBlob = pdf.output('blob');
                 folder.file(fileName, pdfBlob);
+                
+                console.log(`PDF creato: ${fileName} (Numero unificato: ${numeroRicevuta})`);
                 
                 const progress = ((index + 1) / results.length) * 90;
                 updateProgressBar(progress);
@@ -492,7 +525,7 @@ async function createZipWithPDFs() {
         downloadArea.innerHTML = `
             <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin: 10px 0; text-align: center;">
                 <h4 style="color: #155724; margin-bottom: 10px;">✅ ZIP generato con successo!</h4>
-                <p>Contiene ${results.length} ricevute PDF</p>
+                <p>Contiene ${results.length} ricevute PDF con numerazione cronologica corretta</p>
                 <a href="${url}" download="Ricevute_${currentDate}.zip" 
                    style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 16px;">
                    📥 Clicca qui per scaricare il file ZIP
@@ -515,33 +548,4 @@ async function createZipWithPDFs() {
             </div>
         `;
     } finally {
-        btn.innerHTML = 'Crea ZIP con PDF (Tutti)';
-        btn.disabled = false;
-        document.getElementById('progressBar').style.display = 'none';
-        updateProgressBar(0);
-    }
-}
-
-// Esposizione IMMEDIATA funzioni al contesto globale
-window.generatePDFPreviews = generatePDFPreviews;
-window.createZipWithPDFs = createZipWithPDFs;
-window.createZipWithPDFsByMonth = createZipWithPDFsByMonth;
-window.checkPDFLibraries = checkPDFLibraries;
-
-// Debug IMMEDIATO - verifica che le funzioni siano esposte
-console.log('🔍 pdf-export.js CARICATO - Verifico esposizione funzioni...');
-console.log('generatePDFPreviews:', typeof window.generatePDFPreviews);
-console.log('createZipWithPDFs:', typeof window.createZipWithPDFs);
-console.log('createZipWithPDFsByMonth:', typeof window.createZipWithPDFsByMonth);
-
-if (typeof window.generatePDFPreviews !== 'function') {
-    console.error('❌ ERRORE: generatePDFPreviews non è esposta correttamente!');
-} else {
-    console.log('✅ generatePDFPreviews esposta correttamente');
-}
-
-if (typeof window.createZipWithPDFs !== 'function') {
-    console.error('❌ ERRORE: createZipWithPDFs non è esposta correttamente!');
-} else {
-    console.log('✅ createZipWithPDFs esposta correttamente');
-}
+        btn
