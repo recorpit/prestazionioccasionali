@@ -434,7 +434,7 @@ function performMatching() {
     showMatchingResults();
 }
 
-// Visualizzazione risultati semplificata
+// Visualizzazione risultati semplificata CON RAGGRUPPAMENTO ARCHIVIO
 function showMatchingResults() {
     const resultDiv = document.getElementById('matchingResult');
     let html = `
@@ -556,17 +556,48 @@ function showMatchingResults() {
         `;
     }
     
-    // SEZIONE 3: ARCHIVIO NON MATCHATI
+    // SEZIONE 3: ARCHIVIO NON MATCHATI CON RAGGRUPPAMENTO PER CONTROPARTE
     if (movimentiNonMatchati.length > 0) {
+        // RAGGRUPPA per controparte e somma importi
+        const raggruppamentiArchivio = {};
+        let totaleArchivio = 0;
+        
+        movimentiNonMatchati.forEach(movimento => {
+            const key = normalizeString(movimento.controparte);
+            
+            if (!raggruppamentiArchivio[key]) {
+                raggruppamentiArchivio[key] = {
+                    controparte: movimento.controparte, // Nome originale
+                    importoTotale: 0,
+                    movimenti: [],
+                    numeroMovimenti: 0
+                };
+            }
+            
+            raggruppamentiArchivio[key].importoTotale += movimento.importo;
+            raggruppamentiArchivio[key].numeroMovimenti++;
+            raggruppamentiArchivio[key].movimenti.push({
+                importo: movimento.importo,
+                data: movimento.data,
+                index: movimento.index
+            });
+            
+            totaleArchivio += movimento.importo;
+        });
+        
+        // Ordina per importo decrescente
+        const archivioOrdinato = Object.values(raggruppamentiArchivio)
+            .sort((a, b) => b.importoTotale - a.importoTotale);
+        
         html += `
             <h3 style="color: #721c24; background: #f8d7da; padding: 10px; border-radius: 5px; margin-top: 20px;">
-                📁 Archivio Non Matchati (${movimentiNonMatchati.length})
+                📁 Archivio Non Matchati - Raggruppati per Controparte (${archivioOrdinato.length} controparti diverse)
             </h3>
-            <p>Addebiti verso persone NON presenti nelle iscrizioni:</p>
+            <p>Addebiti verso persone NON presenti nelle iscrizioni, raggruppati e sommati per controparte:</p>
             
             <div style="margin-bottom: 15px;">
                 <button onclick="showArchiveControls(true)" style="background: #28a745; margin-right: 10px;">
-                    Mostra Archivio Completo
+                    Mostra Dettagli Archivio
                 </button>
                 <button onclick="createReceiptFromArchive()" style="background: #17a2b8; margin-right: 10px;">
                     Crea Ricevuta da Archivio
@@ -576,47 +607,84 @@ function showMatchingResults() {
                 </button>
             </div>
             
-            <div id="archiveSection" style="display: none;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width: 30px;">☑️</th>
-                            <th>Controparte</th>
-                            <th>Importo</th>
-                            <th>Data</th>
-                            <th>Azioni</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Controparte</th>
+                        <th>N° Movimenti</th>
+                        <th>Importo Totale</th>
+                        <th>Importo Medio</th>
+                        <th>Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
         `;
         
-        movimentiNonMatchati.forEach((movimento, index) => {
+        archivioOrdinato.forEach((gruppo, index) => {
+            const importoMedio = gruppo.importoTotale / gruppo.numeroMovimenti;
+            
             html += `
-                <tr id="archive_${index}">
-                    <td style="text-align: center;">
-                        <input type="checkbox" id="arch_${index}" style="transform: scale(1.2);">
-                    </td>
-                    <td>${movimento.controparte}</td>
-                    <td><strong>€ ${movimento.importo.toFixed(2)}</strong></td>
-                    <td>${movimento.data.toLocaleDateString('it-IT')}</td>
+                <tr id="archive_group_${index}">
                     <td>
-                        <button onclick="createSingleReceipt(${index})" style="background: #007bff; font-size: 12px; padding: 5px;">
+                        <strong>${gruppo.controparte}</strong>
+                        <br><small style="color: #666;">Primo: ${gruppo.movimenti[0].data.toLocaleDateString('it-IT')} - 
+                        Ultimo: ${gruppo.movimenti[gruppo.movimenti.length - 1].data.toLocaleDateString('it-IT')}</small>
+                    </td>
+                    <td style="text-align: center;">
+                        <strong>${gruppo.numeroMovimenti}</strong>
+                    </td>
+                    <td style="text-align: right;">
+                        <strong style="font-size: 16px;">€ ${gruppo.importoTotale.toFixed(2)}</strong>
+                    </td>
+                    <td style="text-align: right;">
+                        <small>€ ${importoMedio.toFixed(2)}</small>
+                    </td>
+                    <td>
+                        <button onclick="showGroupDetails(${index})" 
+                                style="background: #007bff; font-size: 11px; padding: 4px 8px; margin: 2px;">
+                            Dettagli
+                        </button>
+                        <br>
+                        <button onclick="createGroupReceipt(${index})" 
+                                style="background: #28a745; font-size: 11px; padding: 4px 8px; margin: 2px;">
                             Crea Ricevuta
                         </button>
+                    </td>
+                </tr>
+                <tr id="details_${index}" style="display: none; background-color: #f8f9fa;">
+                    <td colspan="5">
+                        <div style="padding: 10px;">
+                            <strong>Dettaglio movimenti:</strong><br>
+                            ${gruppo.movimenti.map(mov => 
+                                `• €${mov.importo.toFixed(2)} - ${mov.data.toLocaleDateString('it-IT')}`
+                            ).join('<br>')}
+                        </div>
                     </td>
                 </tr>
             `;
         });
         
         html += `
-                    </tbody>
-                </table>
-            </div>
+                </tbody>
+                <tfoot style="background-color: #721c24; color: white;">
+                    <tr>
+                        <td><strong>TOTALI ARCHIVIO</strong></td>
+                        <td style="text-align: center;"><strong>${movimentiNonMatchati.length}</strong></td>
+                        <td style="text-align: right;"><strong>€ ${totaleArchivio.toFixed(2)}</strong></td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tfoot>
+            </table>
             
             <div style="background: #d1ecf1; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                <strong>ℹ️ Informazioni:</strong> Questi movimenti non genereranno ricevute automaticamente poiché le controparti non sono presenti nel file iscrizioni.
+                <strong>ℹ️ Informazioni:</strong> Questi movimenti sono raggruppati per controparte e non genereranno ricevute automaticamente 
+                poiché le controparti non sono presenti nel file iscrizioni o non hanno "prestazione occasionale" nella descrizione.
             </div>
         `;
+        
+        // Conserva i dati raggruppati per le funzioni JavaScript
+        window.archivioRaggruppato = archivioOrdinato;
     }
     
     // PULSANTE PROCEDI
@@ -665,10 +733,21 @@ function deleteFromArchive() {
     }
 }
 
-function createSingleReceipt(index) {
-    const movimento = movimentiNonMatchati[index];
-    if (movimento) {
-        alert(`Creazione ricevuta singola per: ${movimento.controparte}\nImporto: €${movimento.importo.toFixed(2)}\n(Funzionalità in sviluppo)`);
+function createGroupReceipt(index) {
+    const gruppo = window.archivioRaggruppato[index];
+    if (gruppo) {
+        alert(`Creazione ricevuta per gruppo: ${gruppo.controparte}\n${gruppo.numeroMovimenti} movimenti\nTotale: €${gruppo.importoTotale.toFixed(2)}\n\n(Funzionalità in sviluppo)`);
+    }
+}
+
+function showGroupDetails(index) {
+    const detailRow = document.getElementById(`details_${index}`);
+    if (detailRow) {
+        if (detailRow.style.display === 'none') {
+            detailRow.style.display = '';
+        } else {
+            detailRow.style.display = 'none';
+        }
     }
 }
 
@@ -754,6 +833,8 @@ window.createReceiptFromArchive = createReceiptFromArchive;
 window.deleteFromArchive = deleteFromArchive;
 window.createSingleReceipt = createSingleReceipt;
 window.proceedToGeneration = proceedToGeneration;
+window.showGroupDetails = showGroupDetails;
+window.createGroupReceipt = createGroupReceipt;
 
 // Debug IMMEDIATO - verifica che le funzioni siano esposte
 console.log('🔍 matching.js CARICATO - Verifico esposizione funzioni...');
