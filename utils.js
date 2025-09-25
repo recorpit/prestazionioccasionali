@@ -18,7 +18,53 @@ function saveToLocalStorage() {
     }
 }
 
-// Gestione numerazione ricevute
+// SISTEMA DI NUMERAZIONE UNIFICATO - FUNZIONE PRINCIPALE
+function assignProgressiveNumbers() {
+    console.log('🔢 Assegnazione numeri progressivi cronologici...');
+    
+    if (!window.results || window.results.length === 0) {
+        console.log('Nessun risultato da numerare');
+        return;
+    }
+
+    // Ordina i results per data cronologica
+    const resultsOrdinati = [...window.results].sort((a, b) => {
+        if (a.anno !== b.anno) {
+            return a.anno - b.anno;
+        }
+        return a.mese - b.mese;
+    });
+
+    console.log('Results ordinati per numerazione:', 
+        resultsOrdinati.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome}`));
+
+    // Resetta la numerazione per CF
+    const numeroProgressivoPerCF = {};
+
+    // Assegna numeri progressivi nell'ordine cronologico
+    resultsOrdinati.forEach((person) => {
+        const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
+        
+        // Incrementa il numero per questo CF
+        if (!numeroProgressivoPerCF[cfKey]) {
+            numeroProgressivoPerCF[cfKey] = 1;
+        } else {
+            numeroProgressivoPerCF[cfKey]++;
+        }
+
+        // Assegna il numero progressivo alla ricevuta
+        person.numeroProgressivo = numeroProgressivoPerCF[cfKey];
+        
+        console.log(`${person.nome} ${person.cognome} - ${person.mese}/${person.anno} → Numero: ${person.numeroProgressivo}`);
+    });
+
+    // Aggiorna i results originali con la numerazione corretta
+    window.results = resultsOrdinati;
+    
+    console.log('✅ Numerazione progressiva completata');
+}
+
+// Gestione numerazione ricevute - MANTIENE COMPATIBILITÀ
 function getNextReceiptNumber(cf) {
     if (!cf) {
         console.error('getNextReceiptNumber chiamato senza CF');
@@ -442,6 +488,7 @@ function validateMovimentiData() {
 }
 
 // Esposizione funzioni al contesto globale
+window.assignProgressiveNumbers = assignProgressiveNumbers; // NUOVO SISTEMA
 window.saveToLocalStorage = saveToLocalStorage;
 window.getNextReceiptNumber = getNextReceiptNumber;
 window.getCurrentReceiptNumber = getCurrentReceiptNumber;
@@ -469,6 +516,7 @@ window.importiAnnualiPerCF = importiAnnualiPerCF;
 
 // Debug - verifica che le funzioni siano esposte
 console.log('utils.js caricato - Funzioni esposte:', {
+    assignProgressiveNumbers: typeof window.assignProgressiveNumbers,
     normalizeString: typeof window.normalizeString,
     getCurrentReceiptNumber: typeof window.getCurrentReceiptNumber,
     updateProgressBar: typeof window.updateProgressBar,
