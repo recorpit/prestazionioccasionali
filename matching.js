@@ -15,13 +15,21 @@ function normalizeString(str) {
         .replace(/[^a-z0-9]/g, '');
 }
 
-// Estrai nome base per raggruppamento archivio
+// Estrai nome base per raggruppamento archivio - SOLO per pattern simili
 function extractBaseName(controparte) {
     if (!controparte) return '';
     
-    // Estrae solo la parte alfabetica iniziale
-    const match = controparte.match(/^([A-Za-z]+)/);
-    return match ? match[1].toUpperCase() : controparte.toUpperCase();
+    // Rileva pattern con codici/numeri: lettere seguite da simboli e numeri
+    const hasPattern = /^([A-Za-z]+)[\*\-\#\d]/.test(controparte);
+    
+    if (hasPattern) {
+        // Estrae solo la parte alfabetica iniziale per pattern simili
+        const match = controparte.match(/^([A-Za-z]+)/);
+        return match ? match[1].toUpperCase() : controparte.toUpperCase();
+    }
+    
+    // Per nomi normali senza pattern, restituisce il nome completo
+    return controparte.toUpperCase();
 }
 
 // Calcolo similarità (Levenshtein)
@@ -777,9 +785,9 @@ function showMatchingResults() {
         `;
     }
     
-    // SEZIONE 3: ARCHIVIO RAGGRUPPATO PER NOME BASE
+    // SEZIONE 3: ARCHIVIO RAGGRUPPATO PER NOME BASE - SOLO PER VISUALIZZAZIONE
     if (movimentiNonMatchati.length > 0) {
-        // RAGGRUPPA per nome base (parte alfabetica)
+        // RAGGRUPPA per nome base (parte alfabetica) SOLO per la visualizzazione
         const raggruppamentiArchivio = {};
         let totaleArchivio = 0;
         
@@ -801,7 +809,7 @@ function showMatchingResults() {
             raggruppamentiArchivio[key].importoTotale += movimento.importo;
             raggruppamentiArchivio[key].numeroMovimenti++;
             raggruppamentiArchivio[key].movimenti.push({
-                controparte: movimento.controparte, // Nome completo
+                controparte: movimento.controparte, // Nome completo originale
                 importo: movimento.importo,
                 data: movimento.data,
                 index: movimento.index
