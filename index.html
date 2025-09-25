@@ -54,7 +54,7 @@
                 <strong>Il sistema processerà:</strong><br>
                 ✅ ADDEBITI verso persone nelle iscrizioni → Ricevute automatiche<br>
                 ⚠️ ACCREDITI da persone nelle iscrizioni → Controllo manuale (possibili rimborsi)<br>
-                📁 ADDEBITI verso persone NON nelle iscrizioni → Archivio per gestione manuale<br>
+                📁 ADDEBITI verso persone NON nelle iscrizioni → Archivio raggruppato per nome base<br>
                 🚫 ACCREDITI da persone NON nelle iscrizioni → Completamente ignorati
             </div>
             
@@ -68,26 +68,16 @@
             
             <!-- Controlli Export -->
             <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-                <h4 style="margin-top: 0; color: #495057;">🎯 Opzioni Export</h4>
+                <h4 style="margin-top: 0; color: #495057;">🎯 Opzioni Export per Mese</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
                     <button onclick="generatePDFPreviews()" id="pdfPreviewBtn" disabled
                             style="background: #6f42c1; color: white; padding: 10px; border: none; border-radius: 5px;">
                         👁️ Anteprima PDF
                     </button>
                     
-                    <button onclick="createZipWithPDFs()" id="downloadBtn" disabled
-                            style="background: #dc3545; color: white; padding: 10px; border: none; border-radius: 5px;">
-                        📦 ZIP PDF (Tutti)
-                    </button>
-                    
                     <button onclick="createZipWithPDFsByMonth()" id="downloadByMonthBtn" disabled
                             style="background: #fd7e14; color: white; padding: 10px; border: none; border-radius: 5px;">
                         📅 ZIP PDF per Mese
-                    </button>
-                    
-                    <button onclick="exportToExcel()" id="exportBtn" disabled
-                            style="background: #20c997; color: white; padding: 10px; border: none; border-radius: 5px;">
-                        📊 Export Excel
                     </button>
                     
                     <button onclick="exportToExcelByMonth()" id="exportByMonthBtn" disabled
@@ -99,6 +89,14 @@
                             style="background: #6c757d; color: white; padding: 10px; border: none; border-radius: 5px;">
                         🔄 Reset Numerazione
                     </button>
+                </div>
+                
+                <div style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 5px; font-size: 14px;">
+                    <strong>💡 Sistema di Selezione Mese:</strong><br>
+                    • PDF e Excel permettono di scegliere quale mese esportare<br>
+                    • Opzione per esportare tutti i mesi separatamente<br>
+                    • Statistiche rimborsi per ogni mese<br>
+                    • Numerazione cronologica corretta
                 </div>
             </div>
             
@@ -118,7 +116,7 @@
             <div id="matchingTab" class="tab-content active">
                 <div id="matchingResult">
                     <p style="text-align: center; color: #6c757d; padding: 40px; font-style: italic;">
-                        Carica i file Excel e clicca su "Esegui Matching Intelligente" per vedere i risultati dell'analisi automatica.
+                        Carica i file Excel e clicca su "Esegui Matching Intelligente" per vedere i risultati dell'analisi automatica con archivio raggruppato.
                     </p>
                 </div>
             </div>
@@ -142,23 +140,53 @@
         
         <!-- Info Box aggiuntive -->
         <div style="margin-top: 30px; background: #e3f2fd; padding: 20px; border-radius: 10px; border-left: 5px solid #2196f3;">
-            <h3 style="color: #1976d2; margin-top: 0;">💡 Come Funziona il Sistema</h3>
+            <h3 style="color: #1976d2; margin-top: 0;">💡 Come Funziona il Sistema Aggiornato</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                 <div>
-                    <strong>1️⃣ Matching Automatico</strong><br>
-                    <small>Il sistema matcha automaticamente le controparti dei movimenti bancari con i nomi nel file iscrizioni</small>
+                    <strong>1️⃣ Matching con Nomi Simili</strong><br>
+                    <small>Il sistema trova automaticamente nomi simili (es: "Sar Zen" → "Sara Zen") con controllo manuale solo sui potenziali</small>
                 </div>
                 <div>
-                    <strong>2️⃣ Separazione Intelligente</strong><br>
-                    <small>Divide addebiti (ricevute) da accrediti (possibili rimborsi) per controllo preciso</small>
+                    <strong>2️⃣ Archivio Intelligente</strong><br>
+                    <small>I movimenti non matchati vengono raggruppati per nome base (es: MICROSOFT* diventa un gruppo unico)</small>
                 </div>
                 <div>
-                    <strong>3️⃣ Archivio Non Matchati</strong><br>
-                    <small>Conserva movimenti di persone non nelle iscrizioni per gestione manuale</small>
+                    <strong>3️⃣ Export per Mese</strong><br>
+                    <small>PDF e Excel permettono di scegliere quale mese esportare o esportare tutti separatamente</small>
                 </div>
                 <div>
-                    <strong>4️⃣ Controllo Duplicati</strong><br>
-                    <small>Evidenzia possibili bonifici errati quando ci sono sia addebiti che accrediti per la stessa persona</small>
+                    <strong>4️⃣ Numerazione Unificata</strong><br>
+                    <small>Numerazione cronologica corretta sia nei documenti HTML che nei nomi file PDF/Excel</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Info Modifiche Commercialista -->
+        <div style="margin-top: 20px; background: #fff3cd; padding: 20px; border-radius: 10px; border-left: 5px solid #ffc107;">
+            <h3 style="color: #856404; margin-top: 0;">🔧 Modifiche Commercialista Applicate</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;">
+                <div>
+                    <strong>📊 Separazione Imponibili:</strong><br>
+                    • Totale Imponibile = solo compensi<br>
+                    • Totale Imponibile1 = solo rimborsi<br>
+                    • Totale Documento = somma esplicita
+                </div>
+                <div>
+                    <strong>💰 Formato Numerico:</strong><br>
+                    • Tutti i numeri con virgola italiana<br>
+                    • Es: 710,00 invece di 710.00
+                </div>
+                <div>
+                    <strong>📋 Causale e Conti:</strong><br>
+                    • Causale cambiata da 135 a 104<br>
+                    • Conto: 816000 (fisso)<br>
+                    • Conto1: 809230 (fisso)
+                </div>
+                <div>
+                    <strong>📈 Risparmio Fiscale:</strong><br>
+                    • Calcolo automatico 20% su rimborsi<br>
+                    • Statistiche dettagliate per mese<br>
+                    • Riepilogo totali
                 </div>
             </div>
         </div>
@@ -196,10 +224,10 @@
             // Controlla funzioni specifiche per file
             const functionsByFile = {
                 'utils.js': ['normalizeString', 'getCurrentReceiptNumber', 'updateProgressBar'],
-                'matching.js': ['loadIscrizioni', 'loadMovimenti', 'performMatching'],
+                'matching.js': ['loadIscrizioni', 'loadMovimenti', 'performMatching', 'extractBaseName'],
                 'receipts.js': ['generateReceipts', 'generateReceipt'],
-                'pdf-export.js': ['generatePDFPreviews', 'createZipWithPDFs', 'createZipWithPDFsByMonth'],
-                'excel-export.js': ['exportToExcel', 'exportToExcelByMonth']
+                'pdf-export.js': ['generatePDFPreviews', 'createZipWithPDFsByMonth', 'exportPDFForMonth'],
+                'excel-export.js': ['exportToExcelByMonth', 'exportExcelForMonth']
             };
             
             Object.entries(functionsByFile).forEach(([file, funcs]) => {
@@ -214,7 +242,7 @@
         
         // Verifica funzioni con diagnostica dettagliata
         function checkAllFunctions() {
-            console.log('Controllo funzioni...');
+            console.log('Controllo funzioni aggiornate...');
             
             const functions = [
                 'loadIscrizioni',
@@ -222,11 +250,10 @@
                 'performMatching',
                 'generateReceipts',
                 'generatePDFPreviews',
-                'createZipWithPDFs',
-                'createZipWithPDFsByMonth',
-                'exportToExcel',
-                'exportToExcelByMonth',
-                'resetAllCounters'
+                'createZipWithPDFsByMonth', // Solo per mese
+                'exportToExcelByMonth',     // Solo per mese
+                'resetAllCounters',
+                'extractBaseName'           // Nuova funzione archivio
             ];
             
             const missing = functions.filter(func => typeof window[func] !== 'function');
@@ -270,7 +297,7 @@
                 }, 2000); // Timeout più lungo: 2 secondi
             } else {
                 console.log('✅ Tutte le funzioni sono disponibili');
-                console.log('Sistema pronto all\'uso!');
+                console.log('Sistema aggiornato pronto: archivio raggruppato + export per mese!');
             }
         }
         
@@ -280,7 +307,7 @@
         });
         
         window.addEventListener('load', () => {
-            console.log('Pagina completamente caricata, verifico funzioni...');
+            console.log('Pagina completamente caricata, verifico funzioni aggiornate...');
             
             // Aspetta un momento per essere sicuro che tutti gli script siano eseguiti
             setTimeout(() => {
@@ -297,13 +324,13 @@
     </script>
     
     <script>
-        // Inizializzazione
+        // Inizializzazione sistema aggiornato
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Sistema caricato, verifico librerie...');
+            console.log('Sistema aggiornato caricato: archivio raggruppato + export per mese, verifico librerie...');
             setTimeout(() => {
                 if (typeof checkLibrariesLoaded === 'function') {
                     if (checkLibrariesLoaded()) {
-                        console.log('✅ Tutte le librerie sono caricate correttamente');
+                        console.log('✅ Tutte le librerie sono caricate correttamente per il sistema aggiornato');
                     }
                 } else {
                     console.log('⏳ Funzione checkLibrariesLoaded in caricamento...');
