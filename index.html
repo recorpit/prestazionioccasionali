@@ -174,13 +174,53 @@
     <script src="excel-export.js"></script>
     
     <script>
-        // Verifica funzioni dopo il caricamento di tutti i file
+        // Sistema diagnostico avanzato
+        function diagnoseLoadingIssues() {
+            console.log('=== DIAGNOSTICA CARICAMENTO JAVASCRIPT ===');
+            
+            // Controlla se i file sono stati caricati
+            const scripts = document.querySelectorAll('script[src]');
+            console.log('Script trovati nel DOM:', scripts.length);
+            scripts.forEach(script => {
+                console.log(`Script: ${script.src} - Loaded: ${script.readyState || 'unknown'}`);
+            });
+            
+            // Controlla le variabili globali da utils.js
+            console.log('Variabili utils.js:', {
+                iscrizioniData: typeof window.iscrizioniData,
+                movimentiData: typeof window.movimentiData,
+                results: typeof window.results,
+                normalizeString: typeof window.normalizeString
+            });
+            
+            // Controlla funzioni specifiche per file
+            const functionsByFile = {
+                'utils.js': ['normalizeString', 'getCurrentReceiptNumber', 'updateProgressBar'],
+                'matching.js': ['loadIscrizioni', 'loadMovimenti', 'performMatching'],
+                'receipts.js': ['generateReceipts', 'generateReceipt'],
+                'pdf-export.js': ['generatePDFPreviews', 'createZipWithPDFs', 'createZipWithPDFsByMonth'],
+                'excel-export.js': ['exportToExcel', 'exportToExcelByMonth']
+            };
+            
+            Object.entries(functionsByFile).forEach(([file, funcs]) => {
+                const missing = funcs.filter(func => typeof window[func] !== 'function');
+                if (missing.length > 0) {
+                    console.error(`❌ ${file} - Funzioni mancanti:`, missing);
+                } else {
+                    console.log(`✅ ${file} - Tutte le funzioni caricate`);
+                }
+            });
+        }
+        
+        // Verifica funzioni con diagnostica dettagliata
         function checkAllFunctions() {
+            console.log('Controllo funzioni...');
+            
             const functions = [
                 'loadIscrizioni',
-                'loadMovimenti',
+                'loadMovimenti', 
                 'performMatching',
-                'generateReceipts', 
+                'generateReceipts',
                 'generatePDFPreviews',
                 'createZipWithPDFs',
                 'createZipWithPDFsByMonth',
@@ -189,32 +229,70 @@
                 'resetAllCounters'
             ];
             
-            console.log('Controllo funzioni...');
             const missing = functions.filter(func => typeof window[func] !== 'function');
             
             if (missing.length > 0) {
                 console.error('❌ Funzioni mancanti:', missing);
                 
-                // Prova a ricontrollare dopo un breve timeout
+                // Esegui diagnostica completa
+                diagnoseLoadingIssues();
+                
+                // Prova a ricontrollare dopo un timeout più lungo
                 setTimeout(() => {
-                    console.log('Secondo controllo funzioni...');
+                    console.log('Secondo controllo funzioni (dopo 2 secondi)...');
                     const stillMissing = functions.filter(func => typeof window[func] !== 'function');
+                    
                     if (stillMissing.length > 0) {
                         console.error('❌ Funzioni ancora mancanti dopo timeout:', stillMissing);
-                        alert('Errore caricamento sistema. Ricarica la pagina (F5).');
+                        
+                        // Diagnostica finale
+                        console.log('=== DIAGNOSTICA FINALE ===');
+                        stillMissing.forEach(func => {
+                            console.log(`${func}:`, typeof window[func]);
+                        });
+                        
+                        // Mostra errore utente con più dettagli
+                        const errorMsg = `Errore caricamento JavaScript:\n\n` +
+                                       `Funzioni mancanti: ${stillMissing.join(', ')}\n\n` +
+                                       `Possibili cause:\n` +
+                                       `• File JavaScript non nella stessa cartella\n` +
+                                       `• Errori di sintassi nei file\n` +
+                                       `• Problemi di cache browser\n\n` +
+                                       `Soluzioni:\n` +
+                                       `1. Ricarica con Ctrl+F5 (svuota cache)\n` +
+                                       `2. Controlla che tutti i file .js siano presenti\n` +
+                                       `3. Apri Console (F12) per vedere errori dettagliati`;
+                        
+                        alert(errorMsg);
                     } else {
                         console.log('✅ Tutte le funzioni sono ora disponibili (secondo controllo)');
                     }
-                }, 1000);
+                }, 2000); // Timeout più lungo: 2 secondi
             } else {
                 console.log('✅ Tutte le funzioni sono disponibili');
+                console.log('Sistema pronto all\'uso!');
             }
         }
         
-        // Controlla le funzioni quando tutto è caricato
+        // Event listeners per il caricamento
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM caricato, attendo caricamento completo...');
+        });
+        
         window.addEventListener('load', () => {
             console.log('Pagina completamente caricata, verifico funzioni...');
-            setTimeout(checkAllFunctions, 100);
+            
+            // Aspetta un momento per essere sicuro che tutti gli script siano eseguiti
+            setTimeout(() => {
+                checkAllFunctions();
+            }, 500); // Timeout iniziale di 500ms
+        });
+        
+        // Gestione errori globali JavaScript
+        window.addEventListener('error', (event) => {
+            console.error('Errore JavaScript globale:', event.error);
+            console.error('File:', event.filename);
+            console.error('Riga:', event.lineno);
         });
     </script>
     
