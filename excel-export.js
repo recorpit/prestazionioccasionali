@@ -343,7 +343,85 @@ function debugExportData() {
     console.log('Validation result:', validation);
 }
 
+// Export Excel singolo - MANTENUTO PER COMPATIBILITA'
+function exportToExcel() {
+    console.log('Redirect a export per mese...');
+    exportToExcelByMonth();
+}
+
+// Utility per validazione dati prima dell'export
+function validateExportData() {
+    if (!results || results.length === 0) {
+        return { valid: false, message: 'Nessuna ricevuta da esportare' };
+    }
+    
+    let invalidRecords = 0;
+    let missingNumbers = 0;
+    let zeroAmounts = 0;
+    
+    results.forEach((person, index) => {
+        if (!person.nome || !person.cognome || !person.compenso) {
+            console.warn(`Record ${index} incompleto:`, person);
+            invalidRecords++;
+        }
+        
+        if (!person.numeroProgressivo) {
+            console.warn(`Record ${index} senza numero progressivo:`, person);
+            missingNumbers++;
+        }
+        
+        if (person.compenso === 0 && person.rimborsoSpese === 0) {
+            console.warn(`Record ${index} con importi zero:`, person);
+            zeroAmounts++;
+        }
+    });
+    
+    if (invalidRecords > 0 || missingNumbers > 0) {
+        return { 
+            valid: false, 
+            message: `${invalidRecords} record incompleti, ${missingNumbers} senza numerazione, ${zeroAmounts} con importi zero. Rigenera le ricevute.` 
+        };
+    }
+    
+    return { valid: true, message: 'Dati validi per export con modifiche commercialista' };
+}
+
+// Utility per debug export
+function debugExportData() {
+    console.log('=== DEBUG EXPORT DATA - MODIFICHE COMMERCIALISTA ===');
+    console.log('Results array:', results);
+    console.log('Results length:', results.length);
+    
+    if (results.length > 0) {
+        console.log('Sample record:', results[0]);
+        console.log('Record keys:', Object.keys(results[0]));
+        console.log('Numerazione progressiva presente:', !!results[0].numeroProgressivo);
+        console.log('Compenso presente:', !!results[0].compenso);
+        console.log('Rimborsi presenti:', !!results[0].rimborsoSpese);
+        
+        // Verifica calcoli
+        const sample = results[0];
+        if (sample.compenso && sample.rimborsoSpese !== undefined) {
+            const totaleCalcolato = sample.compenso + sample.rimborsoSpese;
+            console.log(`Esempio calcolo - Compenso: ${sample.compenso}, Rimborsi: ${sample.rimborsoSpese}, Totale: ${totaleCalcolato}`);
+        }
+        
+        // Verifica raggruppamento per mese
+        const gruppiFase = {};
+        results.forEach(p => {
+            const key = `${p.anno}-${p.mese.toString().padStart(2, '0')}`;
+            if (!gruppiFase[key]) gruppiFase[key] = 0;
+            gruppiFase[key]++;
+        });
+        console.log('Distribuzione per mese:', gruppiFase);
+    }
+    
+    const validation = validateExportData();
+    console.log('Validation result:', validation);
+}
+
 // Esposizione funzioni al contesto globale
+window.exportToExcel = exportToExcel; // Mantiene compatibilità
 window.exportToExcelByMonth = exportToExcelByMonth;
 window.exportExcelForMonth = exportExcelForMonth;
 window.exportAllMonthsExcel = exportAllMonthsExcel;
@@ -351,7 +429,8 @@ window.validateExportData = validateExportData;
 window.debugExportData = debugExportData;
 
 // Debug - verifica che le funzioni siano esposte
-console.log('excel-export.js caricato - Solo export per mese con selezione:', {
+console.log('excel-export.js caricato - Solo export per mese con selezione + utilities:', {
+    exportToExcel: typeof window.exportToExcel,
     exportToExcelByMonth: typeof window.exportToExcelByMonth,
     exportExcelForMonth: typeof window.exportExcelForMonth,
     exportAllMonthsExcel: typeof window.exportAllMonthsExcel,
@@ -359,4 +438,4 @@ console.log('excel-export.js caricato - Solo export per mese con selezione:', {
     debugExportData: typeof window.debugExportData
 });
 
-console.log('✅ excel-export.js caricato - Export per mese con selezione e modifiche commercialista implementato');
+console.log('✅ excel-export.js caricato - Export per mese con utilities e modifiche commercialista implementato');
