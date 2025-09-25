@@ -106,13 +106,13 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
 
         const excelData = [];
         
-        // Intestazione - 32 colonne con modifiche commercialista
+        // Intestazione - 32 colonne con modifiche commercialista CORRETTE
         excelData.push([
             'Id Paese', 'Partita Iva', 'Codice Fiscale', 'Denominazione', 'Cognome', 'Nome',
             'Indirizzo', 'Num. civico', 'CAP', 'Comune', 'Provincia', 'Causale', 'Sezionale',
             'Tipo Doc.', 'Data Doc.', 'Numero Doc.', 'Data doc. fattura origine', 'Num. doc. fattura origine',
             'Descr. Articolo1', 'Imponibile1', 'Aliquota IVA1', 'Natura IVA1', 'Codice IVA1',
-            'Imposta1', 'Totale Imponibile1', 'Totale Imposta1', 'Totale Imponibile', 'Totale Imposta', 
+            'Imposta1', 'Totale Imponibile', 'Totale Imposta', 'Totale Imponibile1', 'Totale Imposta1', 
             'Totale Documento', 'Esigibilita\' IVA', 'Conto', 'Conto1'
         ]);
 
@@ -163,7 +163,7 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
                 const rimborsiStr = rimborsiSpese.toFixed(2).replace('.', ',');
                 const totaleStr = totaleDocumento.toFixed(2).replace('.', ',');
 
-                // Riga dati - 32 colonne
+                // Riga dati - 32 colonne CORRETTE
                 excelData.push([
                     'IT', person.partitaIva || '', person.codiceFiscale || '', denominazione,
                     person.cognome || '', person.nome || '', indirizzo, numCivico,
@@ -171,14 +171,14 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
                     'TD01', dataDoc, numeroRicevuta.toString(), dataDoc, '1',
                     'COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE',
                     compensoStr, '0', 'N2', 'NI', '0',
-                    rimborsiStr,        // Totale Imponibile1 (RIMBORSI)
-                    '0',                // Totale Imposta1 (SEMPRE 0)
-                    compensoStr,        // Totale Imponibile (COMPENSO)
-                    '0',                // Totale Imposta (SEMPRE 0)
-                    totaleStr,          // Totale Documento (COMPENSO + RIMBORSI)
-                    'I',                // Esigibilità IVA
-                    '816000',           // Conto (FISSO)
-                    '809230'            // Conto1 (FISSO)
+                    compensoStr,        // Y - Totale Imponibile (COMPENSO)
+                    '0',                // Z - Totale Imposta (SEMPRE 0)
+                    rimborsiStr,        // AA - Totale Imponibile1 (RIMBORSI)
+                    '0',                // AB - Totale Imposta1 (SEMPRE 0)
+                    totaleStr,          // AC - Totale Documento (COMPENSO + RIMBORSI)
+                    'I',                // AD - Esigibilità IVA
+                    '816000',           // AE - Conto (FISSO)
+                    '809230'            // AF - Conto1 (FISSO)
                 ]);
                 
             } catch (personError) {
