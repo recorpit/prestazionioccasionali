@@ -148,9 +148,22 @@ function getDataFromMovimento(movimento) {
     return new Date();
 }
 
-// Trova persona nelle iscrizioni per controparte
-function findPersonaByControparte(controparte, iscrizioni) {
+// Trova persona nelle iscrizioni per controparte CON FILTRO PRESTAZIONE OCCASIONALE
+function findPersonaByControparte(controparte, movimento, iscrizioni) {
     if (!controparte) return null;
+    
+    // FILTRO OBBLIGATORIO: Controlla colonna D per "prestazione occasionale"
+    const descrizione = findColumnValue(movimento, ['DESCRIZIONE', 'Descrizione', 'descrizione', 'D']) || '';
+    const descrizioneNorm = normalizeString(descrizione);
+    
+    if (!descrizioneNorm.includes('prestazioneoccasionale') && 
+        !descrizioneNorm.includes('prestazione') && 
+        !descrizioneNorm.includes('occasionale')) {
+        console.log(`Movimento ignorato - Descrizione non contiene "prestazione occasionale":`, descrizione);
+        return null;
+    }
+    
+    console.log(`Movimento valido - Descrizione contiene prestazione occasionale:`, descrizione);
     
     const controparteNorm = normalizeString(controparte);
     
@@ -347,12 +360,12 @@ function performMatching() {
     console.log('Addebiti trovati:', addebiti.length);
     console.log('Accrediti trovati:', accrediti.length);
     
-    // STEP 2: Processa ADDEBITI - Solo se presente nelle iscrizioni
+    // STEP 2: Processa ADDEBITI - Solo se presente nelle iscrizioni E ha "prestazione occasionale"
     addebiti.forEach(addebito => {
-        const persona = findPersonaByControparte(addebito.controparte, iscrizioniData);
+        const persona = findPersonaByControparte(addebito.controparte, addebito.movimento, iscrizioniData);
         
         if (persona) {
-            // MATCHATO - Persona presente nelle iscrizioni
+            // MATCHATO - Persona presente nelle iscrizioni E ha prestazione occasionale
             movimentiMatchati.push({
                 movimento: addebito.movimento,
                 persona: persona,
@@ -363,22 +376,38 @@ function performMatching() {
                 index: addebito.index
             });
         } else {
-            // NON MATCHATO ma addebito - Va in archivio
-            movimentiNonMatchati.push({
-                movimento: addebito.movimento,
-                controparte: addebito.controparte,
-                importo: addebito.importo,
-                data: addebito.data,
-                tipo: 'ADDEBITO',
-                index: addebito.index,
-                motivo: 'Persona non presente nelle iscrizioni'
+            // Controlla se è una persona nelle iscrizioni ma senza "prestazione occasionale"
+            const personaSenzaPrestazione = iscrizioniData.find(isc => {
+                const cognome = isc.C;
+                const nome = isc.D;
+                if (!nome || !cognome) return false;
+                const controparteNorm = normalizeString(addebito.controparte);
+                const nomeNorm = normalizeString(nome);
+                const cognomeNorm = normalizeString(cognome);
+                return (controparteNorm.includes(nomeNorm) && controparteNorm.includes(cognomeNorm));
             });
+            
+            if (personaSenzaPrestazione) {
+                console.log(`Movimento ignorato - Persona nelle iscrizioni ma senza "prestazione occasionale":`, addebito.controparte);
+                // Non aggiungere né ai matchati né ai non matchati - completamente ignorato
+            } else {
+                // NON MATCHATO - Persona non presente nelle iscrizioni
+                movimentiNonMatchati.push({
+                    movimento: addebito.movimento,
+                    controparte: addebito.controparte,
+                    importo: addebito.importo,
+                    data: addebito.data,
+                    tipo: 'ADDEBITO',
+                    index: addebito.index,
+                    motivo: 'Persona non presente nelle iscrizioni'
+                });
+            }
         }
     });
     
     // STEP 3: Processa ACCREDITI - Solo se presente nelle iscrizioni (sospetti)
     accrediti.forEach(accredito => {
-        const persona = findPersonaByControparte(accredito.controparte, iscrizioniData);
+        const persona = findPersonaByControparte(accredito.controparte, accredito.movimento, iscrizioniData);
         
         if (persona) {
             // ACCREDITO DA PERSONA NELLE ISCRIZIONI - Sospetto rimborso
