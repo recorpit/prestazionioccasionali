@@ -1,4 +1,4 @@
-// Export Excel per mese con selezione - MODIFICHE COMMERCIALISTA
+// Export Excel per mese con selezione - MODIFICHE COMMERCIALISTA + DENOMINAZIONE CORRETTA
 function exportToExcelByMonth() {
     console.log('Inizio export Excel per mese con selezione e modifiche commercialista...');
     
@@ -84,7 +84,7 @@ function exportToExcelByMonth() {
     }
 }
 
-// Esporta Excel per un mese specifico - CON MODIFICHE COMMERCIALISTA
+// Esporta Excel per un mese specifico - CON MODIFICHE COMMERCIALISTA + DENOMINAZIONE CORRETTA
 function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese) {
     const [anno, mese] = meseAnno.split('-');
     const mesiNomi = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
@@ -96,6 +96,7 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
         `Ricevute da esportare: ${ricevuteMese.length}\n` +
         `Rimborsi spese del mese: € ${rimborsiMese.toFixed(2).replace('.', ',')}\n` +
         `Risparmio fiscale (20%): € ${risparmioMese.toFixed(2).replace('.', ',')}\n\n` +
+        `DENOMINAZIONE: Formato "COGNOME Nome" per codici fornitori ordinati\n\n` +
         `Procedere con l'export Excel?`
     );
     
@@ -116,14 +117,14 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
             'Totale Documento', 'Esigibilita\' IVA', 'Conto', 'Conto1'
         ]);
 
-        // Ordina le ricevute di questo mese per CF
+        // Ordina le ricevute di questo mese per COGNOME (ordinamento alfabetico corretto)
         const ricevuteMeseOrdinate = ricevuteMese.sort((a, b) => {
-            const cfA = a.codiceFiscale || `${a.nome}_${a.cognome}`;
-            const cfB = b.codiceFiscale || `${b.nome}_${b.cognome}`;
-            return cfA.localeCompare(cfB);
+            const cognomeA = (a.cognome || '').toUpperCase();
+            const cognomeB = (b.cognome || '').toUpperCase();
+            return cognomeA.localeCompare(cognomeB);
         });
 
-        // Dati per questo mese - CON NUMERAZIONE UNIFICATA E MODIFICHE COMMERCIALISTA
+        // Dati per questo mese - CON NUMERAZIONE UNIFICATA E DENOMINAZIONE CORRETTA
         ricevuteMeseOrdinate.forEach(person => {
             try {
                 const numeroRicevuta = person.numeroProgressivo;
@@ -133,7 +134,8 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
                 const lastDayOfMonth = new Date(person.anno, person.mese, 0);
                 const dataDoc = lastDayOfMonth.toLocaleDateString('it-IT');
                 
-                const denominazione = `${person.nome || ''} ${person.cognome || ''}`.trim();
+                // DENOMINAZIONE CORRETTA: "COGNOME Nome" per codici fornitori ordinati
+                const denominazione = `${(person.cognome || '').toUpperCase()} ${person.nome || ''}`.trim();
                 
                 // Separa indirizzo e numero civico
                 const indirizzoCompleto = person.indirizzo || '';
@@ -153,17 +155,26 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
                     }
                 }
 
-                // CALCOLI CON MODIFICHE COMMERCIALISTA
-                const compensoLordo = person.compenso || 0;
-                const rimborsiSpese = person.rimborsoSpese || 0;
+                // CALCOLI CON MODIFICHE COMMERCIALISTA - FIX RIMBORSI
+                const compensoLordo = parseFloat(person.compenso) || 0;
+                let rimborsiSpese = parseFloat(person.rimborsoSpese) || 0;
+                
+                // FORZA VALORE NUMERICO PER RIMBORSI (Fix problema import)
+                if (isNaN(rimborsiSpese) || rimborsiSpese < 0) {
+                    console.warn(`Rimborsi non validi per ${person.nome} ${person.cognome}: ${person.rimborsoSpese}, forzo a 0`);
+                    rimborsiSpese = 0;
+                }
+                
                 const totaleDocumento = compensoLordo + rimborsiSpese;
                 
-                // Formato con virgola italiana
+                // Formato con virgola italiana - ASSICURA FORMATO NUMERICO
                 const compensoStr = compensoLordo.toFixed(2).replace('.', ',');
                 const rimborsiStr = rimborsiSpese.toFixed(2).replace('.', ',');
                 const totaleStr = totaleDocumento.toFixed(2).replace('.', ',');
+                
+                console.log(`${denominazione} → Compenso: ${compensoStr}, Rimborsi: ${rimborsiStr}, Totale: ${totaleStr}`);
 
-                // Riga dati - 32 colonne CORRETTE
+                // Riga dati - 32 colonne CORRETTE CON DENOMINAZIONE CORRETTA
                 excelData.push([
                     'IT', person.partitaIva || '', person.codiceFiscale || '', denominazione,
                     person.cognome || '', person.nome || '', indirizzo, numCivico,
@@ -173,7 +184,7 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
                     compensoStr, '0', 'N2', 'NI', '0',
                     compensoStr,        // Y - Totale Imponibile (COMPENSO)
                     '0',                // Z - Totale Imposta (SEMPRE 0)
-                    rimborsiStr,        // AA - Totale Imponibile1 (RIMBORSI)
+                    rimborsiStr,        // AA - Totale Imponibile1 (RIMBORSI) - FORMATO FORZATO
                     '0',                // AB - Totale Imposta1 (SEMPRE 0)
                     totaleStr,          // AC - Totale Documento (COMPENSO + RIMBORSI)
                     'I',                // AD - Esigibilità IVA
@@ -189,9 +200,32 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
         // Crea e scarica il file Excel per questo mese
         const ws = XLSX.utils.aoa_to_sheet(excelData);
         
+        // Formatta le colonne numeriche per assicurare il riconoscimento
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        
+        // Forza formato numerico per colonne importi (AA - rimborsi)
+        for (let row = 1; row <= range.e.r; row++) {
+            const rimborsiCell = `AA${row + 1}`;
+            const compensoCell = `Y${row + 1}`;
+            const totaleCell = `AC${row + 1}`;
+            
+            if (ws[rimborsiCell]) {
+                ws[rimborsiCell].t = 'n'; // Tipo numero
+                ws[rimborsiCell].z = '#,##0.00'; // Formato numero con decimali
+            }
+            if (ws[compensoCell]) {
+                ws[compensoCell].t = 'n';
+                ws[compensoCell].z = '#,##0.00';
+            }
+            if (ws[totaleCell]) {
+                ws[totaleCell].t = 'n';
+                ws[totaleCell].z = '#,##0.00';
+            }
+        }
+        
         // Larghezza colonne (32 colonne)
         const colWidths = [
-            {wch: 5}, {wch: 15}, {wch: 16}, {wch: 30}, {wch: 20}, {wch: 20},
+            {wch: 5}, {wch: 15}, {wch: 16}, {wch: 35}, {wch: 20}, {wch: 20}, // Denominazione più larga
             {wch: 30}, {wch: 8}, {wch: 8}, {wch: 25}, {wch: 8}, {wch: 8}, {wch: 8},
             {wch: 8}, {wch: 12}, {wch: 10}, {wch: 12}, {wch: 10}, {wch: 50},
             {wch: 12}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 12},
@@ -204,10 +238,10 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
         
         const fileName = `Export_Ricevute_${mesiNomi[parseInt(mese)]}_${anno}.xlsx`;
         
-        console.log(`Scaricando file: ${fileName}`);
+        console.log(`Scaricando file: ${fileName} con denominazione "COGNOME Nome"`);
         XLSX.writeFile(wb, fileName);
         
-        // Messaggio di successo
+        // Messaggio di successo con info denominazione
         setTimeout(() => {
             const totalCompensi = ricevuteMese.reduce((s,p) => s + p.compenso, 0);
             const message = `✅ Export Excel completato per ${nomeCompleto}!\n\n` +
@@ -216,8 +250,9 @@ function exportExcelForMonth(meseAnno, ricevuteMese, rimborsiMese, risparmioMese
                           `💰 Rimborsi spese: €${rimborsiMese.toFixed(2).replace('.', ',')}\n` +
                           `🎯 Risparmio fiscale: €${risparmioMese.toFixed(2).replace('.', ',')}\n\n` +
                           `🔧 Modifiche commercialista applicate:\n` +
+                          `• Denominazione: "COGNOME Nome" per codici ordinati\n` +
                           `• Causale 104 • Separazione compensi/rimborsi\n` +
-                          `• Virgola italiana • Conti bilancio\n\n` +
+                          `• Virgola italiana • Conti bilancio • Fix formato rimborsi\n\n` +
                           `File: ${fileName}`;
             alert(message);
         }, 500);
@@ -249,6 +284,7 @@ function exportAllMonthsExcel(ricevutePerMese, totaleRimborsi, risparmioFiscale)
         `Ricevute totali: ${totalRicevute}\n` +
         `Rimborsi spese totali: € ${totalRimborsiTutti.toFixed(2).replace('.', ',')}\n` +
         `Risparmio fiscale (20%): € ${risparmioTotale.toFixed(2).replace('.', ',')}\n\n` +
+        `DENOMINAZIONE: Formato "COGNOME Nome" per codici fornitori ordinati\n\n` +
         `Verranno generati ${Object.keys(ricevutePerMese).length} file Excel separati.\n` +
         `Procedere?`
     );
@@ -277,6 +313,7 @@ function exportAllMonthsExcel(ricevutePerMese, totaleRimborsi, risparmioFiscale)
               `📄 Ricevute totali: ${totalRicevute}\n` +
               `💰 Rimborsi spese: €${totalRimborsiTutti.toFixed(2).replace('.', ',')}\n` +
               `🎯 Risparmio fiscale: €${risparmioTotale.toFixed(2).replace('.', ',')}\n\n` +
+              `✨ Denominazione "COGNOME Nome" per codici fornitori ordinati\n` +
               `Tutti i file Excel sono stati scaricati con numerazione cronologica corretta.`);
     }, 1000);
 }
@@ -287,7 +324,7 @@ function exportToExcel() {
     exportToExcelByMonth();
 }
 
-// Utility per validazione dati prima dell'export
+// Utility per validazione dati prima dell'export - CON CHECK RIMBORSI
 function validateExportData() {
     if (!results || results.length === 0) {
         return { valid: false, message: 'Nessuna ricevuta da esportare' };
@@ -296,6 +333,7 @@ function validateExportData() {
     let invalidRecords = 0;
     let missingNumbers = 0;
     let zeroAmounts = 0;
+    let invalidReimbursements = 0;
     
     results.forEach((person, index) => {
         if (!person.nome || !person.cognome || !person.compenso) {
@@ -312,21 +350,28 @@ function validateExportData() {
             console.warn(`Record ${index} con importi zero:`, person);
             zeroAmounts++;
         }
+        
+        // Controllo specifico rimborsi
+        const rimborsi = parseFloat(person.rimborsoSpese);
+        if (person.rimborsoSpese !== undefined && (isNaN(rimborsi) || rimborsi < 0)) {
+            console.warn(`Record ${index} con rimborsi non validi:`, person.rimborsoSpese);
+            invalidReimbursements++;
+        }
     });
     
     if (invalidRecords > 0 || missingNumbers > 0) {
         return { 
             valid: false, 
-            message: `${invalidRecords} record incompleti, ${missingNumbers} senza numerazione, ${zeroAmounts} con importi zero. Rigenera le ricevute.` 
+            message: `${invalidRecords} record incompleti, ${missingNumbers} senza numerazione, ${zeroAmounts} con importi zero, ${invalidReimbursements} con rimborsi non validi. Rigenera le ricevute.` 
         };
     }
     
-    return { valid: true, message: 'Dati validi per export con modifiche commercialista' };
+    return { valid: true, message: `Dati validi per export con modifiche commercialista e denominazione "COGNOME Nome"` };
 }
 
-// Utility per debug export
+// Utility per debug export - CON INFO DENOMINAZIONE E RIMBORSI
 function debugExportData() {
-    console.log('=== DEBUG EXPORT DATA - MODIFICHE COMMERCIALISTA ===');
+    console.log('=== DEBUG EXPORT DATA - MODIFICHE COMMERCIALISTA + DENOMINAZIONE CORRETTA ===');
     console.log('Results array:', results);
     console.log('Results length:', results.length);
     
@@ -337,21 +382,34 @@ function debugExportData() {
         console.log('Compenso presente:', !!results[0].compenso);
         console.log('Rimborsi presenti:', !!results[0].rimborsoSpese);
         
-        // Verifica calcoli
+        // Verifica denominazione
         const sample = results[0];
+        const denominazioneOld = `${sample.nome || ''} ${sample.cognome || ''}`.trim();
+        const denominazioneNew = `${(sample.cognome || '').toUpperCase()} ${sample.nome || ''}`.trim();
+        console.log(`Denominazione PRIMA: "${denominazioneOld}"`);
+        console.log(`Denominazione DOPO: "${denominazioneNew}"`);
+        
+        // Verifica calcoli e rimborsi
         if (sample.compenso && sample.rimborsoSpese !== undefined) {
-            const totaleCalcolato = sample.compenso + sample.rimborsoSpese;
-            console.log(`Esempio calcolo - Compenso: ${sample.compenso}, Rimborsi: ${sample.rimborsoSpese}, Totale: ${totaleCalcolato}`);
+            const compenso = parseFloat(sample.compenso) || 0;
+            const rimborsi = parseFloat(sample.rimborsoSpese) || 0;
+            const totaleCalcolato = compenso + rimborsi;
+            console.log(`Esempio calcolo - Compenso: ${compenso}, Rimborsi: ${rimborsi} (tipo: ${typeof sample.rimborsoSpese}), Totale: ${totaleCalcolato}`);
+            console.log(`Rimborsi validi: ${!isNaN(rimborsi) && rimborsi >= 0}`);
         }
         
-        // Verifica raggruppamento per mese
+        // Verifica raggruppamento per mese con ordinamento
         const gruppiFase = {};
         results.forEach(p => {
             const key = `${p.anno}-${p.mese.toString().padStart(2, '0')}`;
-            if (!gruppiFase[key]) gruppiFase[key] = 0;
-            gruppiFase[key]++;
+            if (!gruppiFase[key]) gruppiFase[key] = [];
+            gruppiFase[key].push(`${(p.cognome || '').toUpperCase()} ${p.nome || ''}`);
         });
-        console.log('Distribuzione per mese:', gruppiFase);
+        
+        Object.keys(gruppiFase).forEach(mese => {
+            gruppiFase[mese].sort();
+            console.log(`${mese}: ${gruppiFase[mese].length} ricevute, prime 3: ${gruppiFase[mese].slice(0,3).join(', ')}`);
+        });
     }
     
     const validation = validateExportData();
@@ -359,7 +417,7 @@ function debugExportData() {
 }
 
 // ESPOSIZIONE IMMEDIATA DELLE FUNZIONI
-console.log('🔄 Esposizione funzioni excel-export.js...');
+console.log('🔄 Esposizione funzioni excel-export.js con denominazione corretta...');
 
 window.exportToExcel = exportToExcel;
 window.exportToExcelByMonth = exportToExcelByMonth;
@@ -391,4 +449,4 @@ if (typeof window.exportToExcelByMonth !== 'function') {
     console.log('✅ exportToExcelByMonth esposta correttamente');
 }
 
-console.log('✅ excel-export.js caricato - Export per mese con modifiche commercialista FUNZIONANTE');
+console.log('✅ excel-export.js MODIFICATO - DENOMINAZIONE "COGNOME Nome" + FIX RIMBORSI - FUNZIONANTE');
