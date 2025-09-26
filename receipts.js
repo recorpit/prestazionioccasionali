@@ -1,4 +1,4 @@
-// Generazione ricevute - CON SISTEMA NUMERAZIONE UNIFICATO + FIX RIMBORSI
+// Generazione ricevute - CON SISTEMA NUMERAZIONE UNIFICATO
 function generateReceipts() {
     console.log('generateReceipts chiamata, results:', results);
     console.log('results.length:', results ? results.length : 'results undefined');
@@ -41,20 +41,14 @@ function generateReceipts() {
         results.map(r => `${r.mese}/${r.anno} - ${r.nome} ${r.cognome} - Numero: ${r.numeroProgressivo}`));
     
     results.forEach((person, index) => {
-        // FIX ERRORE: Assicura che rimborsoSpese sia sempre un numero
-        if (person.rimborsoSpese === undefined || person.rimborsoSpese === null || isNaN(person.rimborsoSpese)) {
-            console.warn(`Fix rimborsoSpese per ${person.nome} ${person.cognome}: ${person.rimborsoSpese} → 0`);
-            person.rimborsoSpese = 0;
-        }
-        
         // Controllo limite €2.500
         const compensoNetto = person.compenso * 0.8;
         const cfKey = person.codiceFiscale || `${person.nome}_${person.cognome}`;
         const risultatoControllo = checkAndUpdateAnnualAmount(cfKey, compensoNetto);
         
-        // Accumula i totali - CON CONTROLLO SICUREZZA
-        totalePrestazioni += person.compenso || 0;
-        totaleRimborsi += person.rimborsoSpese || 0;
+        // Accumula i totali
+        totalePrestazioni += person.compenso;
+        totaleRimborsi += person.rimborsoSpese;
         
         if (risultatoControllo.superaLimite) {
             alertiSuperamento.push({
@@ -88,17 +82,9 @@ function generateReceipts() {
         if (person.dettaglioMovimenti && person.dettaglioMovimenti.length > 0) {
             movimentiDettaglio = '<br><strong>Dettaglio movimenti:</strong><br>';
             person.dettaglioMovimenti.forEach(mov => {
-                const importoSafe = parseFloat(mov.importo) || 0;
-                const dataSafe = mov.data ? mov.data.toLocaleDateString('it-IT') : 'Data non disponibile';
-                movimentiDettaglio += `• ${mov.controparte || 'N/A'}: €${importoSafe.toFixed(2)} (${dataSafe})<br>`;
+                movimentiDettaglio += `• ${mov.controparte}: €${mov.importo.toFixed(2)} (${mov.data.toLocaleDateString('it-IT')})<br>`;
             });
         }
-        
-        // RIMBORSI SICURI - RIGA 103 ORIGINALE CORRETTA
-        const rimborsiSafe = person.rimborsoSpese || 0;
-        const rimborsiDisplay = rimborsiSafe > 0 ? 
-            `<strong>Rimborso spese:</strong> €${rimborsiSafe.toFixed(2)}<br>` : 
-            '<em>Nessun rimborso spese</em><br>';
         
         previewItem.innerHTML = `
             <div style="display: grid; grid-template-columns: 1fr 200px; gap: 15px; align-items: start;">
@@ -111,16 +97,16 @@ function generateReceipts() {
                         <strong>Periodo:</strong> ${mesi[person.mese]} ${person.anno}<br>
                         ${person.movimenti && person.movimenti.length > 1 ? `<strong>Movimenti aggregati:</strong> ${person.movimenti.length}<br>` : ''}
                         ${movimentiDettaglio}
-                        <strong>Movimento bancario totale:</strong> €${(person.movimentoBancario || 0).toFixed(2)}<br>
-                        ${rimborsiDisplay}
-                        <strong>Compenso lordo:</strong> €${(person.compenso || 0).toFixed(2)}<br>
+                        <strong>Movimento bancario totale:</strong> €${person.movimentoBancario.toFixed(2)}<br>
+                        ${person.rimborsoSpese > 0 ? `<strong>Rimborso spese:</strong> €${person.rimborsoSpese.toFixed(2)}<br>` : '<em>Nessun rimborso spese</em><br>'}
+                        <strong>Compenso lordo:</strong> €${person.compenso.toFixed(2)}<br>
                         <strong>Totale annuale:</strong> €${risultatoControllo.nuovoTotale.toFixed(2)}${warningHtml}
                     </div>
                 </div>
                 <div style="background: #e8f5e9; padding: 10px; border-radius: 5px; text-align: center;">
                     <strong style="color: #155724;">Netto a Pagare</strong><br>
                     <span style="font-size: 18px; font-weight: bold; color: #155724;">
-                        €${((person.compenso || 0) * 0.8 + (person.rimborsoSpese || 0)).toFixed(2)}
+                        €${(person.compenso * 0.8 + person.rimborsoSpese).toFixed(2)}
                     </span>
                 </div>
             </div>
@@ -128,7 +114,7 @@ function generateReceipts() {
         previewContainer.appendChild(previewItem);
     });
     
-    // Aggiungi riepilogo totali alla fine dell'anteprima - CON CONTROLLI SICUREZZA
+    // Aggiungi riepilogo totali alla fine dell'anteprima
     const totalsItem = document.createElement('div');
     totalsItem.style.cssText = 'border: 2px solid #007bff; padding: 20px; margin: 25px 0; background: #e3f2fd; border-radius: 10px;';
     totalsItem.innerHTML = `
@@ -210,23 +196,17 @@ function getReceiptDate(anno, mese) {
     return lastDayOfMonth.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// Generazione HTML ricevuta singola - USA NUMERAZIONE PASSATA COME PARAMETRO + FIX RIMBORSI
+// Generazione HTML ricevuta singola - USA NUMERAZIONE PASSATA COME PARAMETRO
 function createReceiptHTML(person, numeroRicevuta, dataRicevuta) {
     console.log(`Creazione HTML per ${person.nome} ${person.cognome} - Numero: ${numeroRicevuta} - Data: ${dataRicevuta}`);
     
-    // FIX SICUREZZA: Assicura che tutti i valori numerici siano validi
-    const compenso = parseFloat(person.compenso) || 0;
-    const rimborsiSpese = parseFloat(person.rimborsoSpese) || 0;
-    
-    const ritenuta = compenso * 0.20;
-    const compensoNetto = compenso - ritenuta;
-    const nettoPagare = compensoNetto + rimborsiSpese;
-    const needsStamp = compenso > 77.47;
-    
-    console.log(`${person.nome} ${person.cognome} - Compenso: €${compenso}, Rimborsi: €${rimborsiSpese}, Netto: €${nettoPagare.toFixed(2)}`);
+    const ritenuta = person.compenso * 0.20;
+    const compensoNetto = person.compenso - ritenuta;
+    const nettoPagare = compensoNetto + person.rimborsoSpese;
+    const needsStamp = person.compenso > 77.47;
     
     // Template HTML ricevuta - formato identico all'originale
-    if (rimborsiSpese === 0) {
+    if (person.rimborsoSpese === 0) {
         // Ricevuta SENZA rimborso spese
         return `
             <div class="ricevuta" id="receipt-${results.indexOf(person)}">
@@ -269,11 +249,11 @@ function createReceiptHTML(person, numeroRicevuta, dataRicevuta) {
                     <tbody>
                         <tr>
                             <td style="border: 1px solid #000; padding: 10px;">COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
-                            <td style="border: 1px solid #000; padding: 10px; text-align: right;">${compenso.toFixed(2)} €</td>
+                            <td style="border: 1px solid #000; padding: 10px; text-align: right;">${person.compenso.toFixed(2)} €</td>
                         </tr>
                         <tr style="background-color: #f0f0f0;">
                             <td style="border: 1px solid #000; padding: 10px; text-align: center;"><strong>COMPENSO LORDO</strong></td>
-                            <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${compenso.toFixed(2)} €</strong></td>
+                            <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${person.compenso.toFixed(2)} €</strong></td>
                         </tr>
                         <tr>
                             <td style="border: 1px solid #000; padding: 10px;">RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
@@ -342,7 +322,7 @@ function createReceiptHTML(person, numeroRicevuta, dataRicevuta) {
                     <strong>DESCRIZIONE ATTIVITÀ:</strong> COMPENSO PER PRESTAZIONE ARTISTICA DELLO SPETTACOLO
                 </div>
                 
-                <table class="ricevuta-table" style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
                     <thead>
                         <tr style="background-color: #003d7a;">
                             <th style="color: white; padding: 10px; text-align: left; border: 1px solid #000;">DESCRIZIONE COMPENSO</th>
@@ -352,11 +332,11 @@ function createReceiptHTML(person, numeroRicevuta, dataRicevuta) {
                     <tbody>
                         <tr>
                             <td style="border: 1px solid #000; padding: 10px;">COMPENSO PER PRESTAZIONE DI LAVORO AUTONOMO OCCASIONALE</td>
-                            <td style="border: 1px solid #000; padding: 10px; text-align: right;">${compenso.toFixed(2)} €</td>
+                            <td style="border: 1px solid #000; padding: 10px; text-align: right;">${person.compenso.toFixed(2)} €</td>
                         </tr>
                         <tr style="background-color: #f0f0f0;">
                             <td style="border: 1px solid #000; padding: 10px; text-align: center;"><strong>COMPENSO LORDO</strong></td>
-                            <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${compenso.toFixed(2)} €</strong></td>
+                            <td style="border: 1px solid #000; padding: 10px; text-align: right;"><strong>${person.compenso.toFixed(2)} €</strong></td>
                         </tr>
                         <tr>
                             <td style="border: 1px solid #000; padding: 10px;">RITENUTA D'ACCONTO IRPEF 20% - Art. 25 DPR 633/72</td>
@@ -368,7 +348,7 @@ function createReceiptHTML(person, numeroRicevuta, dataRicevuta) {
                         </tr>
                         <tr>
                             <td style="border: 1px solid #000; padding: 10px;">RIMBORSO SPESE</td>
-                            <td style="border: 1px solid #000; padding: 10px; text-align: right;">${rimborsiSpese.toFixed(2)} €</td>
+                            <td style="border: 1px solid #000; padding: 10px; text-align: right;">${person.rimborsoSpese.toFixed(2)} €</td>
                         </tr>
                         <tr style="background-color: #e0e0e0;">
                             <td style="border: 1px solid #000; padding: 10px; text-align: center;"><strong>NETTO A PAGARE</strong></td>
@@ -416,4 +396,4 @@ window.generateReceipt = generateReceipt; // Compatibilità
 window.createReceiptHTML = createReceiptHTML;
 window.getReceiptDate = getReceiptDate;
 
-console.log('✅ receipts.js caricato - Sistema numerazione unificato + FIX errore rimborsoSpese implementato');
+console.log('receipts.js caricato - Sistema numerazione unificato implementato');
