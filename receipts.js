@@ -88,7 +88,9 @@ function generateReceipts() {
         if (person.dettaglioMovimenti && person.dettaglioMovimenti.length > 0) {
             movimentiDettaglio = '<br><strong>Dettaglio movimenti:</strong><br>';
             person.dettaglioMovimenti.forEach(mov => {
-                movimentiDettaglio += `• ${mov.controparte}: €${mov.importo.toFixed(2)} (${mov.data.toLocaleDateString('it-IT')})<br>`;
+                const importoSafe = parseFloat(mov.importo) || 0;
+                const dataSafe = mov.data ? mov.data.toLocaleDateString('it-IT') : 'Data non disponibile';
+                movimentiDettaglio += `• ${mov.controparte || 'N/A'}: €${importoSafe.toFixed(2)} (${dataSafe})<br>`;
             });
         }
         
